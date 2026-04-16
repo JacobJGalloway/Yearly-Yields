@@ -1,1 +1,32 @@
-# TODO: implement sensor_reading
+import uuid
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.sensor_reading import AssessmentStatus, ReadingSource
+
+
+class SensorReadingCreate(BaseModel):
+    growing_area_id: uuid.UUID
+    crop_cycle_id: Optional[uuid.UUID] = None
+    temperature: float = Field(..., description="Temperature in °F")
+    humidity: float = Field(..., ge=0.0, le=100.0, description="Relative humidity %")
+    reading_source: ReadingSource
+    read_at: datetime
+
+
+class SensorReadingRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    growing_area_id: uuid.UUID
+    crop_cycle_id: Optional[uuid.UUID]
+    temperature: float
+    humidity: float
+    reading_source: ReadingSource
+    read_at: datetime
+    received_at: datetime
+    assessment_status: AssessmentStatus
+    assessment_summary: Optional[str]
+    created_at: datetime

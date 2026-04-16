@@ -4,28 +4,28 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
-from app.models.user import UserRole
 
-
-class UserCreate(BaseModel):
+class CustomerCreate(BaseModel):
+    name: str
     email: EmailStr
-    password: str
-    full_name: str
-    role: UserRole = UserRole.farmer
+    phone: Optional[str] = None
 
 
-class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
     is_active: Optional[bool] = None
 
 
-class UserRead(BaseModel):
+class CustomerRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    owner_id: uuid.UUID
+    name: str
     email: str
-    full_name: str
-    role: UserRole
+    phone: Optional[str]
     is_active: bool
     created_at: datetime
     updated_at: datetime
