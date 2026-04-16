@@ -15,9 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.alert import Alert, AlertStatus, AlertType
-from app.models.crop import CropCycle
+from app.models.crop import Crop, CropCycle
 from app.models.field import GrowingArea
 from app.models.sensor_reading import AssessmentStatus, SensorReading
+from app.services.vector_service import find_similar_weeks, generate_embedding
 
 
 # ── Dispatcher ────────────────────────────────────────────────────────────────
@@ -53,15 +54,43 @@ async def handle_get_historical_context(
     tool_input: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """
-    Vector similarity search against historical_summaries.
-    TODO: implement pgvector similarity query via vector_service.py
-    """
-    return {
-        "status": "no_data",
-        "message": "Historical context service not yet implemented.",
-        "summaries": [],
-    }
+    """Vector similarity search against historical_summaries."""
+    growing_area_id = uuid.UUID(tool_input["growing_area_id"])
+    crop_id = uuid.UUID(tool_input["crop_id"])
+    temperature = tool_input["temperature"]
+    humidity = tool_input["humidity"]
+
+    # Fetch crop name and area type for richer embedding text
+    crop_result = await db.execute(select(Crop).where(Crop.id == crop_id))
+    crop = crop_result.scalar_one_or_none()
+
+    area_result = await db.execute(
+        select(GrowingArea).where(GrowingArea.id == growing_area_id)
+    )
+    area = area_result.scalar_one_or_none()
+
+    if crop is None or area is None:
+        return {"status": "no_data", "message": "Crop or growing area not found.", "summaries": []}
+
+    embedding = await generate_embedding(
+        temperature, humidity, crop.name, area.area_type
+    )
+
+    summaries = await find_similar_weeks(
+        growing_area_id=growing_area_id,
+        crop_id=crop_id,
+        embedding=embedding,
+        db=db,
+    )
+
+    if not summaries:
+        return {
+            "status": "no_data",
+            "message": "No historical summaries found for this growing area and crop.",
+            "summaries": [],
+        }
+
+    return {"status": "ok", "summaries": summaries}
 
 
 async def handle_get_weather_context(
