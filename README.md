@@ -12,8 +12,8 @@ Agricultural monitoring and yield prediction system for Mid-West farmers.
 ## Crops (initial)
 | Type | Crops |
 |---|---|
-| Field (acres) | Corn, Soybeans |
-| Greenhouse (sq ft) | Tomatoes, Peppers |
+| Field (acres) | Corn, Soy beans |
+| Greenhouse (sq ft) | Tomatoes, Arugula Lettuce |
 
 ## Stack
 | Layer | Technology |
