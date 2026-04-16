@@ -32,11 +32,22 @@ class Settings(BaseSettings):
     # Default: 24h. Min: 4h (avoid spam). Max: 72h (3 days — ensure farmer awareness).
     ALERT_EMAIL_INTERVAL_HOURS: int = 24
 
+    # How many consecutive normal readings are required to resolve an active alert.
+    # Default: 3. Min: 1. Max: 10.
+    ALERT_RESOLUTION_THRESHOLD: int = 3
+
     @field_validator("ALERT_EMAIL_INTERVAL_HOURS")
     @classmethod
     def validate_alert_interval(cls, v: int) -> int:
         if v < 4 or v > 72:
             raise ValueError("ALERT_EMAIL_INTERVAL_HOURS must be between 4 and 72")
+        return v
+
+    @field_validator("ALERT_RESOLUTION_THRESHOLD")
+    @classmethod
+    def validate_resolution_threshold(cls, v: int) -> int:
+        if v < 1 or v > 10:
+            raise ValueError("ALERT_RESOLUTION_THRESHOLD must be between 1 and 10")
         return v
 
     # App
