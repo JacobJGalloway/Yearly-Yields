@@ -10,7 +10,6 @@ from app.db.session import engine
 
 configure_logging()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: verify DB connection, register pgvector extension check
