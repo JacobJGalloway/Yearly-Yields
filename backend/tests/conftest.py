@@ -10,7 +10,6 @@ Setup required (one-time):
   docker exec -it yearly_yields_db psql -U user -c "CREATE DATABASE yearly_yields_test;"
 """
 
-import asyncio
 from typing import AsyncGenerator
 
 import pytest
@@ -36,14 +35,6 @@ _TestSessionLocal = async_sessionmaker(
 )
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Single event loop shared across the entire test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def create_tables():
     """Create all tables once per test session, drop them at the end."""
@@ -58,12 +49,26 @@ async def create_tables():
 async def db() -> AsyncGenerator[AsyncSession, None]:
     """
     Provide a test database session that rolls back after each test.
-    Ensures complete isolation between tests.
+
+    Uses a connection-level outer transaction so that any commit() calls
+    inside endpoint handlers hit a SAVEPOINT rather than the real transaction.
+    Rolling back the outer connection at teardown discards all test data.
     """
-    async with _TestSessionLocal() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+    conn = await _engine.connect()
+    await conn.begin()
+
+    session = AsyncSession(
+        bind=conn,
+        expire_on_commit=False,
+        autoflush=False,
+        join_transaction_mode="create_savepoint",
+    )
+
+    yield session
+
+    await session.close()
+    await conn.rollback()
+    await conn.close()
 
 
 @pytest_asyncio.fixture
@@ -127,17 +132,17 @@ async def hired_hand_user(db: AsyncSession) -> User:
     return user
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def owner_token(owner_user: User) -> str:
     return create_access_token(str(owner_user.id))
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def farmer_token(farmer_user: User) -> str:
     return create_access_token(str(farmer_user.id))
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def hired_hand_token(hired_hand_user: User) -> str:
     return create_access_token(str(hired_hand_user.id))
 

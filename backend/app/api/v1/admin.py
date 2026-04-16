@@ -81,7 +81,7 @@ async def seed_data(
             owner = owner_result.scalar_one_or_none()
             if owner is None:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="No owner user found. Create an owner user before seeding.",
                 )
             customer = Customer(owner_id=owner.id, name=name, email=email)

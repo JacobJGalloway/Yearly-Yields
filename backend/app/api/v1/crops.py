@@ -48,7 +48,7 @@ async def create_crop_cycle(
 
         if area.area_type == GrowingAreaType.dwc_greenhouse and not crop.greenhouse_compatible:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"{crop.name} is not compatible with dwc_greenhouse areas",
             )
 

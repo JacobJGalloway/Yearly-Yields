@@ -111,4 +111,4 @@ async def test_create_reading_unauthenticated(
     reading_payload: dict,
 ):
     response = await client.post("/api/v1/readings/", json=reading_payload)
-    assert response.status_code == 403
+    assert response.status_code == 401

@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.loop import run_anomaly_check
 from app.db.session import get_db
+from app.dependencies import get_current_user
 from app.models.sensor_reading import AssessmentStatus, SensorReading
+from app.models.user import User
 from app.schemas.sensor_reading import SensorReadingCreate, SensorReadingRead
 
 router = APIRouter()
@@ -16,6 +18,7 @@ async def create_sensor_reading(
     payload: SensorReadingCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> SensorReadingRead:
     reading = SensorReading(
         growing_area_id=payload.growing_area_id,

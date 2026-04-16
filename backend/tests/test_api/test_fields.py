@@ -105,7 +105,7 @@ async def test_hired_hand_cannot_create_field(client: AsyncClient, hired_hand_to
 @pytest.mark.asyncio
 async def test_list_fields_unauthenticated(client: AsyncClient):
     response = await client.get("/api/v1/fields/")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio

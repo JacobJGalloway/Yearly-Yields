@@ -23,12 +23,12 @@ async def create_growing_area(
     # Enforce area measurement rules
     if payload.area_type == GrowingAreaType.open_field and payload.area_acres is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="area_acres is required for open_field areas",
         )
     if payload.area_type == GrowingAreaType.dwc_greenhouse and payload.area_sqft is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="area_sqft is required for dwc_greenhouse areas",
         )
 
