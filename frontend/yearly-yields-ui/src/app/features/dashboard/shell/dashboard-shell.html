@@ -1,0 +1,36 @@
+<mat-sidenav-container class="shell-container">
+
+  <mat-sidenav mode="side" opened class="shell-sidenav">
+    <div class="sidenav-header">
+      <img src="brand/Logo Icon Default Mode.png" alt="Yearly Yields" class="sidenav-logo" />
+      <span class="sidenav-title">Yearly Yields</span>
+    </div>
+
+    <mat-nav-list>
+      @for (item of navItems; track item.route) {
+        <a mat-list-item
+           [routerLink]="item.route"
+           routerLinkActive="active-link"
+           [matTooltip]="item.label"
+           matTooltipPosition="right">
+          <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+          <span matListItemTitle>{{ item.label }}</span>
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="shell-content">
+    <mat-toolbar class="shell-toolbar">
+      <span class="toolbar-spacer"></span>
+      <button mat-icon-button (click)="logout()" matTooltip="Sign out">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </mat-toolbar>
+
+    <main class="shell-main">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+
+</mat-sidenav-container>

@@ -2,8 +2,9 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
+from app.core.crop_phases import get_phase_days
 from app.models.crop import CropCycleStatus, YieldUnit
 
 
@@ -17,6 +18,21 @@ class CropRead(BaseModel):
     default_harvest_customer_id: Optional[uuid.UUID]
     default_transplant_customer_id: Optional[uuid.UUID]
     created_at: datetime
+
+    @computed_field
+    @property
+    def seeding_days(self) -> int:
+        return get_phase_days(self.name).seeding_days
+
+    @computed_field
+    @property
+    def growing_days(self) -> int:
+        return get_phase_days(self.name).growing_days
+
+    @computed_field
+    @property
+    def harvest_days(self) -> int:
+        return get_phase_days(self.name).harvest_days
 
 
 class CropCycleCreate(BaseModel):

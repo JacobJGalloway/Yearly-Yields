@@ -6,6 +6,11 @@ from pydantic import BaseModel, ConfigDict
 from app.models.yield_plan import ConfidenceLevel
 
 
+class YieldPlanCreate(BaseModel):
+    crop_cycle_id: uuid.UUID
+    target_yield: float
+
+
 class YieldPlanRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

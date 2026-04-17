@@ -34,6 +34,7 @@ class YieldUnit(str, Enum):
 class CropCycleStatus(str, Enum):
     active = "active"
     harvested = "harvested"
+    transplanted = "transplanted"
     abandoned = "abandoned"
     fallow = "fallow"
 
@@ -46,8 +47,8 @@ class Crop(Base, CreatedAtMixin):
       name             | greenhouse_compatible | typical_cycle_days | harvest_customer    | transplant_customer
       corn             | False                 | 120                | Global Harvest      | —
       soybeans         | False                 | 100                | Global Harvest      | —
-      tomatoes         | True                  | 90                 | National Nourish    | Acme Farms
-      arugula_lettuce  | True                  | 40                 | National Nourish    | Acme Farms
+      tomatoes         | True                  | 90                 | National Nourish    | Prairie Start Nursery
+      arugula_lettuce  | True                  | 40                 | National Nourish    | Prairie Start Nursery
 
     Compatibility rule (enforced at service layer):
       open_field areas accept any crop (all 4).

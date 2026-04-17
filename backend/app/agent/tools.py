@@ -6,6 +6,111 @@ Claude uses them to decide which tool to call and with what arguments.
 The actual execution happens in tool_handlers.py.
 """
 
+YIELD_PLAN_TOOLS = [
+    {
+        "name": "get_sensor_history",
+        "description": (
+            "Retrieve recent sensor readings for a growing area to understand current season "
+            "temperature and humidity conditions. Returns up to 90 days of readings."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "growing_area_id": {
+                    "type": "string",
+                    "description": "UUID of the growing area.",
+                },
+            },
+            "required": ["growing_area_id"],
+        },
+    },
+    {
+        "name": "get_cycle_yield_history",
+        "description": (
+            "Retrieve historical harvested crop cycles for a growing area and crop, "
+            "including actual vs target yield. Use this to understand past performance "
+            "and inform planting quantity recommendations."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "growing_area_id": {
+                    "type": "string",
+                    "description": "UUID of the growing area.",
+                },
+                "crop_id": {
+                    "type": "string",
+                    "description": "UUID of the crop.",
+                },
+            },
+            "required": ["growing_area_id", "crop_id"],
+        },
+    },
+    {
+        "name": "get_weather_context",
+        "description": (
+            "Fetch current regional weather conditions from NOAA for the growing area's "
+            "location. Use to factor in seasonal weather risk."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "growing_area_id": {
+                    "type": "string",
+                    "description": "UUID of the growing area.",
+                },
+            },
+            "required": ["growing_area_id"],
+        },
+    },
+    {
+        "name": "save_yield_plan",
+        "description": (
+            "Save the completed yield plan recommendation. MUST be called as the final "
+            "action. Provide your recommended planting quantity, confidence level, and "
+            "a farmer-readable reasoning summary."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "crop_cycle_id": {
+                    "type": "string",
+                    "description": "UUID of the crop cycle this plan is for.",
+                },
+                "growing_area_id": {
+                    "type": "string",
+                    "description": "UUID of the growing area.",
+                },
+                "recommended_plant_quantity": {
+                    "type": "number",
+                    "description": "Recommended number of seeds or transplants.",
+                },
+                "target_yield": {
+                    "type": "number",
+                    "description": "Target yield in the crop's yield unit (lbs or bushels).",
+                },
+                "confidence_level": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high"],
+                    "description": "Confidence in the recommendation.",
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "Farmer-readable explanation of the recommendation and key risk factors.",
+                },
+            },
+            "required": [
+                "crop_cycle_id",
+                "growing_area_id",
+                "recommended_plant_quantity",
+                "target_yield",
+                "confidence_level",
+                "reasoning",
+            ],
+        },
+    },
+]
+
 ANOMALY_CHECK_TOOLS = [
     {
         "name": "get_historical_context",

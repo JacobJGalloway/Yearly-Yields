@@ -18,7 +18,7 @@ class Customer(Base, TimestampMixin):
     Seeded customers (created before crop seed data):
       - "Global Harvest"    → default harvest buyer for corn and soybeans
       - "National Nourish"  → default harvest buyer for tomatoes and arugula lettuce
-      - "Acme Farms"        → default transplant buyer for tomatoes and arugula lettuce
+      - "Prairie Start Nursery" → default transplant buyer for tomatoes and arugula lettuce
                               (transplant invoicing is a deferred feature)
     """
 

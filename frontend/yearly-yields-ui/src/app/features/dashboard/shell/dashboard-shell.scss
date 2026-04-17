@@ -1,0 +1,63 @@
+.shell-container {
+  height: 100vh;
+}
+
+.shell-sidenav {
+  width: 220px;
+  background-color: var(--mat-sys-surface-container);
+  border-right: 1px solid var(--mat-sys-outline-variant);
+}
+
+.sidenav-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  margin-bottom: 8px;
+}
+
+.sidenav-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.sidenav-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+}
+
+.active-link {
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+
+  mat-icon {
+    color: var(--mat-sys-on-secondary-container);
+  }
+}
+
+.shell-content {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.shell-toolbar {
+  background-color: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.shell-main {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}

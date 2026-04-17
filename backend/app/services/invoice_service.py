@@ -23,6 +23,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.crop import CropCycle
 from app.models.invoice import CropRate, Invoice, InvoiceStatus
 
+VALID_INVOICE_TRANSITIONS: dict[InvoiceStatus, set[InvoiceStatus]] = {
+    InvoiceStatus.draft: {InvoiceStatus.sent, InvoiceStatus.voided},
+    InvoiceStatus.sent: {InvoiceStatus.paid, InvoiceStatus.voided},
+    InvoiceStatus.paid: set(),
+    InvoiceStatus.voided: set(),
+}
+
+
+def validate_invoice_transition(current: InvoiceStatus, target: InvoiceStatus) -> None:
+    allowed = VALID_INVOICE_TRANSITIONS[current]
+    if target not in allowed:
+        allowed_str = ", ".join(s.value for s in allowed) if allowed else "none (terminal state)"
+        raise ValueError(
+            f"Cannot transition invoice from '{current.value}' to '{target.value}'. "
+            f"Allowed: {allowed_str}."
+        )
+
 
 async def get_active_crop_rate(
     crop_id: uuid.UUID,
@@ -76,17 +93,18 @@ async def set_crop_rate(
 async def create_draft_invoice(
     crop_cycle_id: uuid.UUID,
     db: AsyncSession,
+    use_transplant_customer: bool = False,
 ) -> Optional[Invoice]:
     """
-    Auto-generate a draft invoice when a CropCycle is marked harvested.
+    Auto-generate a draft invoice when a CropCycle is marked harvested or transplanted.
+
+    use_transplant_customer=True routes the invoice to default_transplant_customer_id
+    (e.g. Prairie Start Nursery) instead of default_harvest_customer_id.
 
     Returns None if:
       - The crop cycle has no actual_yield recorded.
       - The crop has no active CropRate.
-      - The crop has no default_harvest_customer.
-
-    Caller is responsible for ensuring the crop cycle status is 'harvested'
-    before calling this function.
+      - The crop has no matching default customer for the invoice type.
     """
     cycle_result = await db.execute(
         select(CropCycle).where(CropCycle.id == crop_cycle_id)
@@ -95,11 +113,15 @@ async def create_draft_invoice(
     if cycle is None or cycle.actual_yield is None or cycle.crop_id is None:
         return None
 
-    # Load the crop to get default customer and yield unit
     from app.models.crop import Crop
     crop_result = await db.execute(select(Crop).where(Crop.id == cycle.crop_id))
     crop = crop_result.scalar_one_or_none()
-    if crop is None or crop.default_harvest_customer_id is None:
+
+    customer_id = (
+        crop.default_transplant_customer_id if use_transplant_customer
+        else crop.default_harvest_customer_id
+    )
+    if crop is None or customer_id is None:
         return None
 
     # Snapshot the active rate at harvest time
@@ -110,7 +132,7 @@ async def create_draft_invoice(
     total_amount = round(cycle.actual_yield * rate.rate_per_unit, 2)
 
     invoice = Invoice(
-        customer_id=crop.default_harvest_customer_id,
+        customer_id=customer_id,
         crop_cycle_id=crop_cycle_id,
         rate_id=rate.id,
         quantity=cycle.actual_yield,
@@ -150,6 +172,7 @@ async def update_invoice(
         invoice.notes = notes
 
     if status is not None:
+        validate_invoice_transition(invoice.status, status)
         invoice.status = status
 
     await db.commit()

@@ -10,6 +10,8 @@ from app.db.session import engine
 
 configure_logging()
 
+_is_dev = settings.APP_ENV == "development"
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: verify DB connection, register pgvector extension check
@@ -22,6 +24,10 @@ app = FastAPI(
     title="Yearly Yields API",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
+    openapi_url="/openapi.json" if _is_dev else None,
+    swagger_ui_init_oauth={},
 )
 
 app.add_middleware(

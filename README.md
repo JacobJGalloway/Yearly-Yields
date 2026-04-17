@@ -28,7 +28,7 @@ An agricultural monitoring and yield prediction system built for Mid-West farmer
 |-------|------------|
 | Backend | Python 3.12 + FastAPI + SQLAlchemy 2.0 async |
 | Database | PostgreSQL 16 + pgvector |
-| AI | Anthropic Claude (`claude-haiku-4-5`) + voyage-3 embeddings, ReAct loop |
+| AI | Anthropic Claude (`claude-sonnet-4-6`) + voyage-3 embeddings, ReAct loop |
 | Auth | JWT (python-jose) + bcrypt + RBAC |
 | Alerts | SendGrid |
 | Weather | NOAA API |
@@ -62,8 +62,24 @@ cd backend
 python -m pytest tests/ -v --cov=app --cov-report=term-missing
 ```
 
-28 tests, 71% coverage.
+53 tests across auth, sensor readings, fields, customers, crop cycles, yield plans, and alert services.
 
 ## Frontend
 
-Angular scaffold in progress. See `frontend/README.md`.
+Angular 21 + Angular Material 3 (green palette) + NgRx. Login page, JWT auth flow, and dashboard shell with left-side navigation are live. See `frontend/README.md`.
+
+## First-time setup
+
+After running migrations, create the first owner account (no auth required — locked out once an owner exists):
+
+```bash
+POST /api/v1/admin/bootstrap
+{ "email": "you@example.com", "password": "...", "full_name": "Your Name", "role": "owner" }
+```
+
+Then seed reference data (crops, customers, permissions) via `POST /api/v1/admin/seed` using your owner token.
+
+## Future features
+
+### Crop cycle phase timeline chart
+Each crop stores `seeding_days`, `growing_days`, and `harvest_days` breakdowns (summing to `typical_cycle_days`). The current UI uses these to label the active phase of a cycle (Seeding / Growing / Harvesting). A future enhancement would render a visual Gantt-style timeline per cycle showing all three phases proportionally, derived from `planted_at` + the per-phase day counts. Could be extended to overlay actual sensor anomaly events on the timeline for at-a-glance season health.

@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict
 from app.models.alert import AlertStatus, AlertType
 
 
+class AlertUpdate(BaseModel):
+    status: Optional[AlertStatus] = None
+
+
 class AlertRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

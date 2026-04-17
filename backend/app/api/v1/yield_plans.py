@@ -6,12 +6,55 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.dependencies import get_current_user
-from app.models.user import User
+from app.dependencies import get_current_user, require_role
+from app.models.crop import CropCycle, CropCycleStatus
+from app.models.field import GrowingArea
+from app.models.user import User, UserRole
 from app.models.yield_plan import YieldPlan
-from app.schemas.yield_plan import YieldPlanRead
+from app.schemas.yield_plan import YieldPlanCreate, YieldPlanRead
+from app.services.yield_service import generate_yield_plan
 
 router = APIRouter()
+
+
+@router.post("/", response_model=YieldPlanRead, status_code=status.HTTP_201_CREATED)
+async def create_yield_plan(
+    payload: YieldPlanCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.farmer, UserRole.owner)),
+) -> YieldPlanRead:
+    cycle_result = await db.execute(
+        select(CropCycle)
+        .join(CropCycle.growing_area)
+        .where(
+            CropCycle.id == payload.crop_cycle_id,
+            GrowingArea.owner_id == current_user.id,
+        )
+    )
+    cycle = cycle_result.scalar_one_or_none()
+    if cycle is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Crop cycle not found")
+
+    if cycle.status != CropCycleStatus.active:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Yield plans can only be generated for active cycles (current status: {cycle.status.value}).",
+        )
+
+    if cycle.crop_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Crop cycle has no crop assigned.",
+        )
+
+    plan = await generate_yield_plan(payload.crop_cycle_id, payload.target_yield, db)
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Yield plan agent did not return a result.",
+        )
+
+    return YieldPlanRead.model_validate(plan)
 
 
 @router.get("/", response_model=List[YieldPlanRead])

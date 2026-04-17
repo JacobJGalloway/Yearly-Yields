@@ -12,11 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import hash_password
 from app.db.session import get_db
 from app.dependencies import require_role
 from app.models.crop import Crop, YieldUnit
 from app.models.customer import Customer
 from app.models.user import Permission, RolePermission, User, UserRole
+from app.schemas.user import UserCreate, UserRead
 
 router = APIRouter()
 
@@ -52,6 +54,31 @@ ROLE_PERMISSION_MAP = {
 }
 
 
+@router.post("/bootstrap", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def bootstrap_owner(
+    payload: UserCreate,
+    db: AsyncSession = Depends(get_db),
+) -> UserRead:
+    """
+    Create the first owner user. No auth required.
+    Returns 409 if any owner already exists — use /users/ after that.
+    """
+    existing = await db.execute(select(User).where(User.role == UserRole.owner).limit(1))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Owner already exists")
+
+    user = User(
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        full_name=payload.full_name,
+        role=UserRole.owner,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return UserRead.model_validate(user)
+
+
 @router.post("/seed", status_code=status.HTTP_200_OK)
 async def seed_data(
     db: AsyncSession = Depends(get_db),
@@ -67,7 +94,7 @@ async def seed_data(
     customers = {
         "Global Harvest": "harvest@globalharvest.example.com",
         "National Nourish": "harvest@nationalnourish.example.com",
-        "Acme Farms": "transplant@acmefarms.example.com",
+        "Prairie Start Nursery": "transplant@prairiestartmnursery.example.com",
     }
     customer_map = {}
     for name, email in customers.items():
@@ -113,7 +140,7 @@ async def seed_data(
             "greenhouse_compatible": True,
             "typical_cycle_days": 90,
             "harvest_customer": "National Nourish",
-            "transplant_customer": "Acme Farms",
+            "transplant_customer": "Prairie Start Nursery",
             "yield_unit": YieldUnit.lbs,
         },
         {
@@ -121,7 +148,7 @@ async def seed_data(
             "greenhouse_compatible": True,
             "typical_cycle_days": 40,
             "harvest_customer": "National Nourish",
-            "transplant_customer": "Acme Farms",
+            "transplant_customer": "Prairie Start Nursery",
             "yield_unit": YieldUnit.lbs,
         },
     ]
@@ -132,6 +159,9 @@ async def seed_data(
                 name=crop_data["name"],
                 greenhouse_compatible=crop_data["greenhouse_compatible"],
                 typical_cycle_days=crop_data["typical_cycle_days"],
+                seeding_days=crop_data["seeding_days"],
+                growing_days=crop_data["growing_days"],
+                harvest_days=crop_data["harvest_days"],
                 default_harvest_customer_id=customer_map.get(crop_data["harvest_customer"]),
                 default_transplant_customer_id=customer_map.get(crop_data["transplant_customer"]),
             )
