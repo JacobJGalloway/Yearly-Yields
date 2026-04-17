@@ -40,6 +40,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/readings/readings').then(m => m.ReadingsComponent),
       },
+      {
+        path: 'alerts',
+        loadComponent: () =>
+          import('./features/alerts/alerts').then(m => m.AlertsComponent),
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },
