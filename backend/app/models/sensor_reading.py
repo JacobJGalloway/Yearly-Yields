@@ -14,10 +14,9 @@ if TYPE_CHECKING:
 
 
 class ReadingSource(str, Enum):
-    # TODO: Remove `noaa` once real IoT sensors are deployed and self-generating data.
-    # Until then, NOAA API data is the primary source for sensor readings.
     noaa = "noaa"       # current primary source — pulled from NOAA API
     manual = "manual"   # farmer manual entry via the fallback form
+    fiot = "fiot"       # fake IoT — simulated sensor data for dev/demo (greenhouse effect simulation)
     sensor = "sensor"   # real IoT device POST (future; not yet deployed)
 
 

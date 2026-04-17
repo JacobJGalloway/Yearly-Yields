@@ -104,4 +104,5 @@ Greenhouse cycles (tomatoes, arugula) cycle fast enough (~40 days) that fresh se
 - Coordinate input format (v1.1) — Add Field currently requires decimal lat/long. Add support for degrees, minutes, and seconds (DMS) input with auto-conversion, as most farm GPS equipment outputs DMS format.
 - User-to-growing-area assignment model — allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
 - Configurable crop phase day admin UI — seeding/growing/harvest day breakdowns are currently product-owned constants; future feature allows per-farm overrides via settings.
+- IoT reading source — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
 

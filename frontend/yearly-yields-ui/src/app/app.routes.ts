@@ -35,6 +35,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/crop-cycles/crop-cycles').then(m => m.CropCyclesComponent),
       },
+      {
+        path: 'readings',
+        loadComponent: () =>
+          import('./features/readings/readings').then(m => m.ReadingsComponent),
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },
