@@ -82,8 +82,25 @@ POST /api/v1/admin/bootstrap
 ```
 Then seed reference data (crops, customers, permissions) via `POST /api/v1/admin/seed` using your owner token.
 
+## Seed Data Notes
+
+Crop cycle seed data is backdated so that today's date falls in the **growing phase** of each open field cycle, making the demo immediately meaningful without a time offset setting.
+
+Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted_at` so that `(today - planted_at).days` is between `seeding_days` and `seeding_days + growing_days` for each crop (see `backend/app/core/crop_phases.py` for phase day constants).
+
+| Field | Crop | planted_at | Phase on seed date |
+|-------|------|------------|-------------------|
+| Corn Field | Corn | 2026-04-02 | Growing (day 15 of 95) |
+| Soybean Field | Soybeans | 2026-04-07 | Growing (day 10 of 82) |
+
+Greenhouse cycles (tomatoes, arugula) cycle fast enough (~40 days) that fresh seed data can be created at any time without backdating.
+
 ## Needed features
+- Dashboard nav branding — add icon logo and app name above the nav items in the sidenav header, with Default/Light/Dark mode asset switching to match the active theme.
+- Token refresh — the Angular auth interceptor should automatically use the refresh token to obtain a new access token on 401 responses, giving users a rolling session instead of a hard 30-minute logout. MVP blocker for ROI presentations.
 - Sensor data generator service to trigger a sensor readings process on a field/greenhouse for analysis on a configurable schedule (NOAA would be 1 hour interval and skip hours if configuration if value is higher than 1 [look at "range" and "date=today" examples], source could change from "manual" to "NOAA"). can query NOAA query for current station data to get property values as a current substitute. Will need to be able to "fake" the greenhouse effect on temperature and humidity by end of product as part of the process (can change source to "fIoT" to play with the acronym). This is due to lack of pilot clients and actual growing areas with IoT sensors to currently use.
+
+## Future Features
 - Coordinate input format (v1.1) — Add Field currently requires decimal lat/long. Add support for degrees, minutes, and seconds (DMS) input with auto-conversion, as most farm GPS equipment outputs DMS format.
 - User-to-growing-area assignment model — allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
 - Configurable crop phase day admin UI — seeding/growing/harvest day breakdowns are currently product-owned constants; future feature allows per-farm overrides via settings.

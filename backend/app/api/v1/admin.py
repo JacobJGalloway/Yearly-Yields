@@ -159,9 +159,6 @@ async def seed_data(
                 name=crop_data["name"],
                 greenhouse_compatible=crop_data["greenhouse_compatible"],
                 typical_cycle_days=crop_data["typical_cycle_days"],
-                seeding_days=crop_data["seeding_days"],
-                growing_days=crop_data["growing_days"],
-                harvest_days=crop_data["harvest_days"],
                 default_harvest_customer_id=customer_map.get(crop_data["harvest_customer"]),
                 default_transplant_customer_id=customer_map.get(crop_data["transplant_customer"]),
             )

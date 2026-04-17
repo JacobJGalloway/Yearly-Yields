@@ -30,6 +30,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/fields/fields').then(m => m.FieldsComponent),
       },
+      {
+        path: 'crops',
+        loadComponent: () =>
+          import('./features/crop-cycles/crop-cycles').then(m => m.CropCyclesComponent),
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },
