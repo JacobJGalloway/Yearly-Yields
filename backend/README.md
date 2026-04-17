@@ -59,6 +59,16 @@ pip install -e ".[dev]"
 python -m alembic upgrade head
 ```
 
+## Getting Started
+
+```bash
+cd backend
+cp .env.example .env          # fill in SECRET_KEY, ANTHROPIC_API_KEY, SENDGRID_API_KEY
+pip install -e ".[dev]"
+python -m alembic upgrade head
+python -m uvicorn app.main:app --reload
+```
+
 ## Starting the dev server
 
 From `backend/` with the venv active:
@@ -72,7 +82,7 @@ Swagger UI: http://127.0.0.1:8000/docs
 
 ## Stopping the dev server
 
-Press **Ctrl+C** in the terminal running uvicorn.
+Press **Ctrl+C** in the terminal running uvicorn. This may take multiple attempts as you have to hit the keystroke between polling calls.
 
 ## Subsequent startups
 
@@ -119,7 +129,7 @@ Authorization: Bearer <farmer_or_owner_token>
 
 **What the agent does:**
 1. Pulls recent sensor readings for the growing area (temperature/humidity trends)
-2. Pulls historical harvested cycle data for the same area and crop (actual vs target yield)
+2. Pulls historical harvested cycle yield data for the same area and crop (actual vs target yield)
 3. Fetches regional weather context from NOAA
 4. Returns a `recommended_plant_quantity` (seeds or transplants), a `confidence_level` (low/medium/high), and farmer-readable `reasoning`
 

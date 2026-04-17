@@ -15,3 +15,6 @@ npm install @ngrx/store @ngrx/effects @ngrx/entity @ngrx/router-store @ngrx/stor
 ## Structure
 See architecture plan — features are lazy-loaded modules under `src/app/features/`.
 NgRx used only for `auth` and `alerts` global state.
+
+
+<!-- What is the startup process? -->

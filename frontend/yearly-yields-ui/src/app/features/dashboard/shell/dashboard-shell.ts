@@ -42,6 +42,7 @@ export class DashboardShellComponent {
     { label: 'Yield Plans',  icon: 'bar_chart',      route: '/dashboard/yield-plans' },
     { label: 'Invoices',     icon: 'receipt_long',   route: '/dashboard/invoices' },
     { label: 'Customers',    icon: 'people',         route: '/dashboard/customers' },
+    { label: 'Users',        icon: 'manage_accounts', route: '/dashboard/users' },
   ];
 
   constructor(private store: Store, private router: Router) {}

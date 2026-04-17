@@ -20,6 +20,16 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/dashboard/shell/overview').then(m => m.OverviewComponent),
       },
+      {
+        path: 'users',
+        loadComponent: () =>
+          import('./features/users/users').then(m => m.UsersComponent),
+      },
+      {
+        path: 'fields',
+        loadComponent: () =>
+          import('./features/fields/fields').then(m => m.FieldsComponent),
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },

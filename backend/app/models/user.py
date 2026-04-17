@@ -29,6 +29,8 @@ class User(Base, TimestampMixin):
         SAEnum(UserRole, name="userrole"), nullable=False, default=UserRole.farmer
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Relationships
     growing_areas: Mapped[List["GrowingArea"]] = relationship(
