@@ -97,6 +97,24 @@ docker compose up -d       # run from project root
 python -m uvicorn app.main:app --reload
 ```
 
+## Overall workflow
+
+The seasonal workflow from planting to invoice — Readings and anomaly detection run continuously in the background throughout the entire season, not just at the beginning or end.
+
+```
+Planting ──────────────────── Growing Season ──────────────────── Harvest
+    │                                 │                               │
+    ├─ Create Field               Readings arrive constantly      Log actual_yield
+    ├─ Start Crop Cycle           (manual, NOAA, IoT)             Mark cycle harvested
+    └─ Generate Yield Plan        AI checks each one              Invoice auto-generated
+       (recommended plant qty,    Alerts raised if anomalous      Farmer reviews & sends
+        confidence, reasoning)    Alerts auto-resolve after
+                                  3 consecutive normal readings
+                                  Farmer can resolve manually
+```
+
+**Key distinction:** Yield Plan is a one-time planning snapshot at planting time (or mid-season if conditions change significantly). Readings → Alerts is an ongoing background heartbeat for the entire life of the cycle. Invoice is a one-time wrap-up at harvest.
+
 ## Seeding reference data
 
 After running migrations, seed the required reference data (customers, crops, permissions, role permissions) by calling the admin endpoint as an owner user:

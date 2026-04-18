@@ -45,6 +45,21 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/alerts/alerts').then(m => m.AlertsComponent),
       },
+      {
+        path: 'yield-plans',
+        loadComponent: () =>
+          import('./features/yield-plans/yield-plans').then(m => m.YieldPlansComponent),
+      },
+      {
+        path: 'invoices',
+        loadComponent: () =>
+          import('./features/invoices/invoices').then(m => m.InvoicesComponent),
+      },
+      {
+        path: 'customers',
+        loadComponent: () =>
+          import('./features/customers/customers').then(m => m.CustomersComponent),
+      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },
