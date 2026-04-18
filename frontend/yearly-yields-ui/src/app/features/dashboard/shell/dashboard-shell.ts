@@ -19,9 +19,9 @@ interface NavItem {
 }
 
 const LOGO_MAP: Record<AppTheme, string> = {
-  default: 'brand/Logo Work Name One Line Default Mode Plain.svg',
-  light:   'brand/Logo Work Name One Line Light Mode Plain.svg',
-  dark:    'brand/Logo Work Name One Line Dark Mode Plain.svg',
+  default: 'brand/Logo Work Name One Line Default Mode.svg',
+  light:   'brand/Logo Work Name One Line Light Mode.svg',
+  dark:    'brand/Logo Work Name One Line Dark Mode.svg',
 };
 
 @Component({
