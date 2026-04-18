@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class ReadingSource(str, Enum):
-    noaa = "noaa"       # current primary source — pulled from NOAA API
+    nws = "nws"         # NWS CO-OP station observations (api.weather.gov + NOAA CDO backfill)
     manual = "manual"   # farmer manual entry via the fallback form
     fiot = "fiot"       # fake IoT — simulated sensor data for dev/demo (greenhouse effect simulation)
     sensor = "sensor"   # real IoT device POST (future; not yet deployed)
@@ -54,8 +54,9 @@ class SensorReading(Base, CreatedAtMixin):
     crop_cycle_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("crop_cycles.id"), nullable=True
     )
-    temperature: Mapped[float] = mapped_column(Float, nullable=False)  # °F
-    humidity: Mapped[float] = mapped_column(Float, nullable=False)      # % (0.0–100.0)
+    temperature: Mapped[float] = mapped_column(Float, nullable=False)       # °F
+    humidity: Mapped[float] = mapped_column(Float, nullable=False)         # % (0.0–100.0)
+    ph: Mapped[Optional[float]] = mapped_column(Float, nullable=True)      # DWC only; null for open field
     reading_source: Mapped[ReadingSource] = mapped_column(
         SAEnum(ReadingSource, name="readingsource"), nullable=False
     )

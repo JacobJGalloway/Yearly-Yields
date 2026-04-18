@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Sliding window: rotate access token when its age exceeds this many seconds.
+    # Set to 0 to disable rotation. Defaults to 30s to avoid thrashing on parallel
+    # requests at login while still refreshing well before the 30-min expiry.
+    TOKEN_ROTATION_THRESHOLD_SECONDS: int = 30
 
     # Anthropic
     ANTHROPIC_API_KEY: str
@@ -23,9 +27,11 @@ class Settings(BaseSettings):
     SENDGRID_FROM_EMAIL: str
     SENDGRID_FROM_NAME: str = "Yearly Yields"
 
-    # NOAA
+    # NWS / NOAA
     NOAA_BASE_URL: str = "https://api.weather.gov"
     NOAA_USER_AGENT: str = "yearly-yields/0.1.0"
+    NOAA_CDO_TOKEN: str = ""         # free token from ncei.noaa.gov/cdo-web/token (historical backfill)
+    NWS_POLL_INTERVAL_HOURS: int = 4  # how often to poll NWS observations per active station
 
     # Alerts
     # How many hours must pass before a repeat email is sent for an active alert.

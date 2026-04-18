@@ -71,3 +71,14 @@ def decode_token(token: str, expected_type: str) -> Optional[str]:
         return payload.get("sub")
     except JWTError:
         return None
+
+
+def decode_access_payload(token: str) -> Optional[dict]:
+    """Decode an access token and return its full payload, or None on failure."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != ACCESS_TOKEN_TYPE:
+            return None
+        return payload
+    except JWTError:
+        return None

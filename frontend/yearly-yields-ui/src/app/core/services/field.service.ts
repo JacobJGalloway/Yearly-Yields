@@ -13,6 +13,11 @@ export interface GrowingArea {
   longitude: number;
   area_acres: number | null;
   area_sqft: number | null;
+  nws_station_id: string | null;
+  temp_offset_f: number | null;
+  humidity_offset_pct: number | null;
+  target_temp_f: number | null;
+  target_humidity_pct: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -25,6 +30,11 @@ export interface GrowingAreaCreate {
   longitude: number;
   area_acres?: number;
   area_sqft?: number;
+  nws_station_id?: string;
+  temp_offset_f?: number;
+  humidity_offset_pct?: number;
+  target_temp_f?: number;
+  target_humidity_pct?: number;
 }
 
 export interface GrowingAreaUpdate {
@@ -32,6 +42,11 @@ export interface GrowingAreaUpdate {
   is_active?: boolean;
   area_acres?: number;
   area_sqft?: number;
+  nws_station_id?: string;
+  temp_offset_f?: number;
+  humidity_offset_pct?: number;
+  target_temp_f?: number;
+  target_humidity_pct?: number;
 }
 
 @Injectable({ providedIn: 'root' })

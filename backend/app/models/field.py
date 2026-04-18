@@ -52,6 +52,11 @@ class GrowingArea(Base, TimestampMixin):
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     area_acres: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     area_sqft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    nws_station_id: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    temp_offset_f: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    humidity_offset_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_temp_f: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_humidity_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relationships

@@ -112,8 +112,8 @@ Each test runs inside a rolled-back transaction (outer connection-level savepoin
 
 ## Known gaps / active TODOs
 
-- Token refresh not implemented in Angular interceptor (`auth.interceptor.ts`)
-- `reading_service.py`, `noaa_service.py`, `email_service.py` are stub implementations
-- Crop sub-phases (display-only, crop-specific labels within the three main phases) — planned
-- Dashboard nav branding (sidenav logo / header)
-- Morristown TN greenhouse growing area setup + NWS station assignment
+- **v1.1** — Unique name constraint on `GrowingArea` per owner (DB + API 422 validation); `seed_morristown.py` uses name-match deduplication as a workaround
+- `email_service.py` is a stub implementation
+- NOAA CDO historical backfill not yet triggered (requires `NOAA_CDO_TOKEN` in `.env`; call `nws_service.backfill()` directly)
+- Token refresh in Angular interceptor now implemented; CDO backfill scheduler not yet wired
+- `reading_service.py` stub — NWS polling via lifespan scheduler replaces it for automated readings

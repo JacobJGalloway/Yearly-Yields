@@ -14,6 +14,11 @@ class GrowingAreaCreate(BaseModel):
     longitude: float
     area_acres: Optional[float] = None
     area_sqft: Optional[float] = None
+    nws_station_id: Optional[str] = None
+    temp_offset_f: Optional[float] = None
+    humidity_offset_pct: Optional[float] = None
+    target_temp_f: Optional[float] = None
+    target_humidity_pct: Optional[float] = None
 
 
 class GrowingAreaUpdate(BaseModel):
@@ -21,6 +26,11 @@ class GrowingAreaUpdate(BaseModel):
     is_active: Optional[bool] = None
     area_acres: Optional[float] = None
     area_sqft: Optional[float] = None
+    nws_station_id: Optional[str] = None
+    temp_offset_f: Optional[float] = None
+    humidity_offset_pct: Optional[float] = None
+    target_temp_f: Optional[float] = None
+    target_humidity_pct: Optional[float] = None
 
 
 class GrowingAreaRead(BaseModel):
@@ -34,6 +44,11 @@ class GrowingAreaRead(BaseModel):
     longitude: float
     area_acres: Optional[float]
     area_sqft: Optional[float]
+    nws_station_id: Optional[str]
+    temp_offset_f: Optional[float]
+    humidity_offset_pct: Optional[float]
+    target_temp_f: Optional[float]
+    target_humidity_pct: Optional[float]
     is_active: bool
     created_at: datetime
     updated_at: datetime

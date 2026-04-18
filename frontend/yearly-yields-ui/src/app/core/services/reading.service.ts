@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export type AssessmentStatus = 'pending' | 'normal' | 'anomaly' | 'error';
-export type ReadingSource = 'manual' | 'noaa' | 'fiot' | 'sensor';
+export type ReadingSource = 'manual' | 'nws' | 'fiot' | 'sensor';
 
 export interface SensorReading {
   id: string;
@@ -11,6 +11,7 @@ export interface SensorReading {
   crop_cycle_id: string | null;
   temperature: number;
   humidity: number;
+  ph: number | null;
   reading_source: ReadingSource;
   read_at: string;
   received_at: string;
@@ -24,6 +25,7 @@ export interface SensorReadingCreate {
   crop_cycle_id?: string;
   temperature: number;
   humidity: number;
+  ph?: number;
   reading_source: ReadingSource;
   read_at: string;
 }

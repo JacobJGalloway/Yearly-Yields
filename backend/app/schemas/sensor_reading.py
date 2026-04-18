@@ -12,6 +12,7 @@ class SensorReadingCreate(BaseModel):
     crop_cycle_id: Optional[uuid.UUID] = None
     temperature: float = Field(..., description="Temperature in °F")
     humidity: float = Field(..., ge=0.0, le=100.0, description="Relative humidity %")
+    ph: Optional[float] = Field(None, ge=0.0, le=14.0, description="pH — DWC only, null for open field")
     reading_source: ReadingSource
     read_at: datetime
 
@@ -24,6 +25,7 @@ class SensorReadingRead(BaseModel):
     crop_cycle_id: Optional[uuid.UUID]
     temperature: float
     humidity: float
+    ph: Optional[float]
     reading_source: ReadingSource
     read_at: datetime
     received_at: datetime
