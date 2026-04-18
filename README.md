@@ -6,9 +6,9 @@ An agricultural monitoring and yield prediction system built for Mid-West farmer
 
 ## What it does
 
-- Ingests air temperature and humidity readings from IoT sensors across fields and greenhouses
-  > *Note: Real IoT sensor data is not yet available. NOAA weather station observations currently substitute for open field readings in development. Greenhouse readings require a sensor data generator service — NOAA ambient data is not a valid substitute for controlled growing environments (hydroponic/aeroponic). This service is the first planned future feature.*
-- Runs a ReAct agentic loop (Reason + Act) on every reading — pulling historical context via pgvector similarity search, querying live weather from NOAA, and deciding whether to raise, update, or resolve alerts
+- Ingests air temperature, humidity, and pH readings from IoT sensors across fields and greenhouses
+  > *Note: Real IoT sensor data is not yet available. NWS CO-OP station observations (via api.weather.gov) substitute for open field readings. Greenhouse readings use fIoT simulation — NWS ambient data plus per-building temperature and humidity offsets — to approximate controlled growing environments.*
+- Runs a ReAct agentic loop (Reason + Act) on every reading — pulling historical context via pgvector similarity search, querying live weather from NWS, and deciding whether to raise, update, or resolve alerts
 - Fires email alerts on the first anomaly and every 24 hours until 3 consecutive normal readings resolve the alert
 - Tracks crop cycles with greenhouse compatibility enforcement and auto-generates draft invoices on harvest
 - Supports yield planning and fallow field recommendations based on sensor history
@@ -52,7 +52,7 @@ Draft invoices sit in review until an owner or farmer sends them. From there the
 | AI | Anthropic Claude (`claude-sonnet-4-6`) + voyage-3 embeddings, ReAct loop |
 | Auth  | JWT (python-jose) + bcrypt + RBAC |
 | Alerts | SendGrid |
-| Weather | NOAA API |
+| Weather | NWS CO-OP (api.weather.gov) + NOAA CDO (historical backfill) |
 | Frontend | Angular 21 + Angular Material 3 (green palette) + NgRx |
 
 ## Project structure
@@ -63,8 +63,8 @@ frontend/   Angular UI (scaffold in progress)
 docker/     PostgreSQL + pgvector container config
 ```
 
-API: http://127.0.0.1:8000  
-Swagger UI: http://127.0.0.1:8000/docs
+API: http://localhost:8000  
+Swagger UI: http://localhost:8000/docs
 
 ## Running tests
 
@@ -95,13 +95,15 @@ Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted
 |-------|------|------------|-------------------|
 | Corn Field | Field Corn | 2026-04-02 | Growing (day 15 of 120) |
 | Soybean Field | Soybeans Group III | 2026-04-07 | Growing (day 10 of 112) |
-
-Greenhouse cycles (arugula ~40 days; tomatoes run ~1 year with staggered quarters) can have fresh seed data created at any time without backdating.
+| Morristown GH1 — Bay A | Tennessee Britches Tomato | 2026-01-20 | Growing (day 58 of 80) |
+| Morristown GH1 — Bay B | Tennessee Britches Tomato | 2026-02-20 | Growing (day 27 of 80) |
+| Morristown GH2 — Bay A | Tennessee Britches Tomato | 2026-01-15 | Growing (day 63 of 80) |
+| Morristown GH2 — Bay B | Tennessee Britches Tomato | 2026-03-01 | Growing (day 18 of 80) |
+| Morristown GH2 — Bay C | Arugula Lettuce | 2026-04-01 | Growing (day 3 of 11) |
 
 ## Needed features
-- Dashboard nav branding — add icon logo and app name above the nav items in the sidenav header, with Default/Light/Dark mode asset switching to match the active theme.
-- Token refresh — the Angular auth interceptor should automatically use the refresh token to obtain a new access token on 401 responses, giving users a rolling session instead of a hard 30-minute logout. MVP blocker for ROI presentations.
-- Sensor data generator service — polls NOAA on a configurable schedule (default 1-hour interval; skips ticks when interval > 1) for open field readings, shifting source from `manual` to `noaa`. For greenhouses, simulates controlled-environment effects on temperature and humidity and shifts source to `fIoT`. Required because no pilot clients with real IoT hardware exist yet.
+- NOAA CDO historical backfill — one-time seed of 3 years of weather history per NWS station. Requires `NOAA_CDO_TOKEN` in `.env` (free at ncei.noaa.gov/cdo-web/token); call `nws_service.backfill('KMOR'/'KMTO', start, end)` directly once the token is set.
+- GrowingArea unique name constraint (v1.1) — enforce unique names per owner at the database and API layer. Currently handled by name-match deduplication in `seed_demo_farms.py`.
 
 ## Future Features
 - Backfill anomaly averaging — when the NWS polling service catches up after downtime, average the backfilled observations over the gap window and run anomaly detection on the result. A confirmed anomaly in the average is a stronger signal than any single reading.
