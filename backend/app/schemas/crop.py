@@ -34,6 +34,15 @@ class CropRead(BaseModel):
     def harvest_days(self) -> int:
         return get_phase_days(self.name).harvest_days
 
+    @computed_field
+    @property
+    def sub_phases(self) -> list[dict]:
+        pd = get_phase_days(self.name)
+        return [
+            {"name": sp.name, "label": sp.label, "day_start": sp.day_start, "day_end": sp.day_end}
+            for sp in pd.seeding_sub_phases + pd.growing_sub_phases + pd.harvest_sub_phases
+        ]
+
 
 class CropCycleCreate(BaseModel):
     growing_area_id: uuid.UUID
@@ -44,6 +53,7 @@ class CropCycleCreate(BaseModel):
     planted_at: date
     yield_unit: YieldUnit
     target_yield: Optional[float] = None
+    forecasted_end_date: Optional[date] = None
 
 
 class CropCycleUpdate(BaseModel):
@@ -52,6 +62,7 @@ class CropCycleUpdate(BaseModel):
     harvested_at: Optional[date] = None
     target_yield: Optional[float] = None
     planned_crop_id: Optional[uuid.UUID] = None
+    forecasted_end_date: Optional[date] = None
 
 
 class CropCycleRead(BaseModel):
@@ -65,6 +76,7 @@ class CropCycleRead(BaseModel):
     cycle_number: int
     planted_at: date
     harvested_at: Optional[date]
+    forecasted_end_date: Optional[date]
     yield_unit: YieldUnit
     target_yield: Optional[float]
     actual_yield: Optional[float]

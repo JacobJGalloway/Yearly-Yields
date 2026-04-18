@@ -2,8 +2,10 @@
 
   <mat-sidenav mode="side" opened class="shell-sidenav">
     <div class="sidenav-header">
-      <img src="brand/Logo Icon Default Mode.png" alt="Yearly Yields" class="sidenav-logo" />
-      <span class="sidenav-title">Yearly Yields</span>
+      <img [src]="logoSrc" alt="Yearly Yields" class="sidenav-logo"
+           (click)="openThemePicker()"
+           matTooltip="Change display mode"
+           style="cursor: pointer;" />
     </div>
 
     <mat-nav-list>

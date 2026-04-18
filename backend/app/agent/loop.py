@@ -51,7 +51,11 @@ async def run_anomaly_check(reading_id: uuid.UUID, db: AsyncSession) -> None:
             crop = crop_result.scalar_one_or_none()
             if crop:
                 days_in = (date.today() - cycle.planted_at).days
-                phase_days = get_phase_days(crop.name)
+                phase_days = get_phase_days(
+                    crop.name,
+                    planted_at=cycle.planted_at,
+                    forecasted_end=cycle.forecasted_end_date,
+                )
                 if days_in < phase_days.seeding_days:
                     phase = "seeding"
                 elif days_in < phase_days.seeding_days + phase_days.growing_days:

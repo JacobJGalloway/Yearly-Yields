@@ -70,6 +70,14 @@ export interface CropCycleDialogData {
             <mat-error>Required</mat-error>
           </mat-form-field>
 
+          @if (selectedCropName() === 'tomatoes') {
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Forecasted End Date</mat-label>
+              <input matInput type="date" formControlName="forecasted_end_date" />
+              <mat-hint>First frost date or planned greenhouse shutdown</mat-hint>
+            </mat-form-field>
+          }
+
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Yield Unit</mat-label>
             <mat-select formControlName="yield_unit">
@@ -112,6 +120,14 @@ export interface CropCycleDialogData {
             <mat-label>Target Yield</mat-label>
             <input matInput type="number" formControlName="target_yield" />
           </mat-form-field>
+
+          @if (isTomatoCycle()) {
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Forecasted End Date</mat-label>
+              <input matInput type="date" formControlName="forecasted_end_date" />
+              <mat-hint>First frost date or planned greenhouse shutdown</mat-hint>
+            </mat-form-field>
+          }
         }
       </form>
     </mat-dialog-content>
@@ -146,7 +162,18 @@ export class CropCycleDialogComponent {
     status: [this.data.cycle?.status ?? null as CropCycleStatus | null],
     harvested_at: [null as string | null],
     actual_yield: [null as number | null],
+    forecasted_end_date: [this.data.cycle?.forecasted_end_date ?? null as string | null],
   });
+
+  selectedCropName(): string {
+    const cropId = this.form.get('crop_id')?.value;
+    return this.data.crops.find(c => c.id === cropId)?.name ?? '';
+  }
+
+  isTomatoCycle(): boolean {
+    if (!this.data.cycle) return false;
+    return this.data.crops.find(c => c.id === this.data.cycle?.crop_id)?.name === 'tomatoes';
+  }
 
   availableCrops(): Crop[] {
     const fieldId = this.form.get('growing_area_id')?.value;
@@ -180,6 +207,7 @@ export class CropCycleDialogComponent {
           actual_yield: v.actual_yield ?? undefined,
           harvested_at: v.harvested_at ?? undefined,
           target_yield: v.target_yield ?? undefined,
+          forecasted_end_date: v.forecasted_end_date ?? undefined,
         })
       : this.cropService.createCycle({
           growing_area_id: v.growing_area_id!,
@@ -189,6 +217,7 @@ export class CropCycleDialogComponent {
           planted_at: v.planted_at!,
           yield_unit: v.yield_unit!,
           target_yield: v.target_yield ?? undefined,
+          forecasted_end_date: v.forecasted_end_date ?? undefined,
         });
 
     call.subscribe({

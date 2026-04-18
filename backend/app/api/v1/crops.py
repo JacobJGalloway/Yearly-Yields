@@ -60,6 +60,7 @@ async def create_crop_cycle(
         planted_at=payload.planted_at,
         yield_unit=payload.yield_unit,
         target_yield=payload.target_yield,
+        forecasted_end_date=payload.forecasted_end_date,
     )
     db.add(cycle)
     await db.commit()
@@ -170,6 +171,8 @@ async def update_crop_cycle(
         cycle.target_yield = payload.target_yield
     if payload.planned_crop_id is not None:
         cycle.planned_crop_id = payload.planned_crop_id
+    if payload.forecasted_end_date is not None:
+        cycle.forecasted_end_date = payload.forecasted_end_date
 
     await db.commit()
     await db.refresh(cycle)

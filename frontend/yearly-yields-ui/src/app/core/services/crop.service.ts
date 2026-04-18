@@ -5,6 +5,13 @@ import { Observable } from 'rxjs';
 export type CropCycleStatus = 'active' | 'fallow' | 'harvested' | 'transplanted' | 'abandoned';
 export type YieldUnit = 'bushels' | 'pounds' | 'tons' | 'units';
 
+export interface SubPhase {
+  name: string;
+  label: string;
+  day_start: number;
+  day_end: number;
+}
+
 export interface Crop {
   id: string;
   name: string;
@@ -13,6 +20,7 @@ export interface Crop {
   seeding_days: number;
   growing_days: number;
   harvest_days: number;
+  sub_phases: SubPhase[];
 }
 
 export interface CropCycle {
@@ -24,6 +32,7 @@ export interface CropCycle {
   cycle_number: number;
   planted_at: string;
   harvested_at: string | null;
+  forecasted_end_date: string | null;
   yield_unit: YieldUnit;
   target_yield: number | null;
   actual_yield: number | null;
@@ -41,6 +50,7 @@ export interface CropCycleCreate {
   planted_at: string;
   yield_unit: YieldUnit;
   target_yield?: number;
+  forecasted_end_date?: string;
 }
 
 export interface CropCycleUpdate {
@@ -49,6 +59,7 @@ export interface CropCycleUpdate {
   harvested_at?: string;
   target_yield?: number;
   planned_crop_id?: string;
+  forecasted_end_date?: string;
 }
 
 @Injectable({ providedIn: 'root' })

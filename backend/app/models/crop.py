@@ -132,6 +132,7 @@ class CropCycle(Base, TimestampMixin):
     cycle_number: Mapped[int] = mapped_column(Integer, nullable=False)
     planted_at: Mapped[Date] = mapped_column(Date, nullable=False)
     harvested_at: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    forecasted_end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
     yield_unit: Mapped[YieldUnit] = mapped_column(
         SAEnum(YieldUnit, name="yieldunit"), nullable=False
     )

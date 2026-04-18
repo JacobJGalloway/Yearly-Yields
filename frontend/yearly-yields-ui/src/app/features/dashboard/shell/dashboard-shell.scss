@@ -4,29 +4,45 @@
 
 .shell-sidenav {
   width: 220px;
-  background-color: var(--mat-sys-surface-container);
+  background-color: #507B6A;
   border-right: 1px solid var(--mat-sys-outline-variant);
 }
 
+:host-context(.app-theme-light) .shell-sidenav {
+  background-color: var(--mat-sys-surface-container);
+}
+
+:host-context(.app-theme-dark) .shell-sidenav {
+  background-color: #3B3A3C;
+}
+
 .sidenav-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 16px 12px;
+  padding: 16px;
   border-bottom: 1px solid var(--mat-sys-outline-variant);
   margin-bottom: 8px;
 }
 
 .sidenav-logo {
-  width: 32px;
-  height: 32px;
+  width: 100%;
+  max-height: 48px;
   object-fit: contain;
 }
 
-.sidenav-title {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--mat-sys-on-surface);
+// Default mode: gold nav text and icons
+mat-nav-list {
+  .mdc-list-item__primary-text,
+  mat-icon {
+    color: #C9A227;
+  }
+}
+
+// Light and dark modes: use Material system colors
+:host-context(.app-theme-light) mat-nav-list,
+:host-context(.app-theme-dark) mat-nav-list {
+  .mdc-list-item__primary-text,
+  mat-icon {
+    color: var(--mat-sys-on-surface);
+  }
 }
 
 .active-link {
@@ -35,6 +51,15 @@
 
   mat-icon {
     color: var(--mat-sys-on-secondary-container);
+  }
+}
+
+:host-context(.app-theme-light) .active-link {
+  background-color: #507B6A;
+  color: #C9A227;
+
+  mat-icon {
+    color: #C9A227;
   }
 }
 

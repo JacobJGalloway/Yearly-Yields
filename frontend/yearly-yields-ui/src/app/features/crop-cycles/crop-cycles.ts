@@ -42,6 +42,9 @@ import { CropCycleDialogComponent } from './crop-cycle-dialog';
         <th mat-header-cell *matHeaderCellDef>Phase</th>
         <td mat-cell *matCellDef="let c">
           <span [class]="'phase-' + currentPhase(c)">{{ phaseLabel(c) }}</span>
+          @if (currentSubPhase(c)) {
+            <br><small class="sub-phase-label">{{ currentSubPhase(c) }}</small>
+          }
         </td>
       </ng-container>
 
@@ -96,6 +99,7 @@ import { CropCycleDialogComponent } from './crop-cycle-dialog';
     .phase-growing { color: var(--mat-sys-primary); font-weight: 500; }
     .phase-harvesting { color: var(--mat-sys-tertiary); font-weight: 500; }
     .phase-complete { color: var(--mat-sys-on-surface-variant); }
+    .sub-phase-label { color: var(--mat-sys-on-surface-variant); font-size: 0.75em; font-weight: 400; }
   `],
 })
 export class CropCyclesComponent implements OnInit {
@@ -141,6 +145,61 @@ export class CropCyclesComponent implements OnInit {
     if (cycle.status !== 'active') return '—';
     const phase = this.currentPhase(cycle);
     return ({ seeding: 'Seeding', growing: 'Growing', harvesting: 'Harvesting', complete: '—' })[phase] ?? '—';
+  }
+
+  currentSubPhase(cycle: CropCycle): string {
+    if (cycle.status !== 'active') return '';
+    const crop = this.crops().find(c => c.id === cycle.crop_id);
+    if (!crop) return '';
+    const daysIn = Math.floor((Date.now() - new Date(cycle.planted_at).getTime()) / 86400000);
+    const planted = new Date(cycle.planted_at);
+    const month = planted.getMonth() + 1;
+
+    switch (crop.name) {
+      case 'tomatoes':
+        if (daysIn < 10)  return 'Germination';
+        if (daysIn < 30)  return 'Seedling';
+        if (daysIn < 60)  return 'Vegetative';
+        if (daysIn < 75)  return 'Flowering & Fruit Set';
+        if (daysIn < 110) return 'Fruiting & Ripening';
+        return 'Harvest';
+
+      case 'arugula_lettuce': {
+        const isSummer = month >= 6 && month <= 8;
+        if (daysIn < 7)  return 'Germination';
+        if (daysIn < 14) return 'Seedling';
+        if (daysIn < 25) return 'Rapid Growth';
+        return isSummer ? 'Baby Leaf Harvest' : 'Full Leaf Harvest';
+      }
+
+      case 'soybeans': {
+        const day = planted.getDate();
+        const isDoubleCrop = month > 6 || (month === 6 && day >= 15);
+        if (daysIn < 8) return 'Germination';
+        if (isDoubleCrop) {
+          if (daysIn < 30) return 'Vegetative';
+          if (daysIn < 60) return 'Flowering & Pod Set';
+          if (daysIn < 80) return 'Seed Fill & Maturation';
+          return 'Field Harvest';
+        }
+        if (daysIn < 45)  return 'Vegetative';
+        if (daysIn < 90)  return 'Flowering & Pod Set';
+        if (daysIn < 120) return 'Seed Fill & Maturation';
+        return 'Field Harvest';
+      }
+
+      case 'corn':
+        if (daysIn < 10)  return 'Germination';
+        if (daysIn < 75)  return 'Vegetative';
+        if (daysIn < 85)  return 'Silking & Pollination';
+        if (daysIn < 130) return 'Grain Fill & Drying';
+        return 'Field Harvest';
+
+      default: {
+        const sp = crop.sub_phases?.find(p => daysIn >= p.day_start && daysIn < p.day_end);
+        return sp?.label ?? '';
+      }
+    }
   }
 
   statusLabel(s: string): string {

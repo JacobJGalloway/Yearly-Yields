@@ -16,13 +16,15 @@ An agricultural monitoring and yield prediction system built for Mid-West farmer
 
 ## Growing Areas / Crops (initial scope)
 
-| Type | Crops |
-|------|-------|
-| Open field (acres) | Corn, Soybeans |
-| DWC greenhouse (sq ft) | Tomatoes, Arugula |
+| Type | Crop | Variety / Notes |
+|------|------|-----------------|
+| Open field (acres) | Field Corn | Standard field corn — hard planting window April–early June (southern IL) |
+| Open field (acres) | Soybeans | Group III (primary) / Group IV; double-crop variant when planted ≥ June 15 |
+| DWC greenhouse (sq ft) | Tennessee Britches Tomato | Indeterminate heirloom; staggered quarter seeding (4 simultaneous cycles); harvest until first frost / shutdown |
+| DWC greenhouse (sq ft) | Arugula Lettuce | Full leaf (fall/winter/spring) → baby leaf (summer) based on planted_at month |
 
 ### Crop cycle phase timeline chart
-Each crop stores `seeding_days`, `growing_days`, and `harvest_days` breakdowns (summing to `typical_cycle_days`). The current UI uses these to label the active phase of a cycle (Seeding / Growing / Harvesting). A future enhancement would render a visual Gantt-style timeline per cycle showing all three phases proportionally, derived from `planted_at` + the per-phase day counts. Could be extended to overlay actual sensor anomaly events on the timeline for at-a-glance season health.
+Each crop stores `seeding_days`, `growing_days`, and `harvest_days` breakdowns (summing to `typical_cycle_days`), plus crop-specific sub-phases within each. The current UI labels the active main phase (Seeding / Growing / Harvesting) and the crop-specific sub-phase below it (e.g. Vegetative, Silking & Pollination, Grain Fill & Drying for corn). A future enhancement would render a visual Gantt-style timeline per cycle showing all phases proportionally, derived from `planted_at` + the per-phase day counts. Could be extended to overlay actual sensor anomaly events on the timeline for at-a-glance season health.
 
 ## Invoicing Process
 
@@ -42,8 +44,6 @@ Draft invoices sit in review until an owner or farmer sends them. From there the
 - **Customers** — manage harvest and transplant customer records
 
 ## Tech stack
-
-53 tests, 71% coverage across auth, sensor readings, fields, customers, crop cycles, yield plans, and alert services. Invoice service, yield service, and vector service are the primary coverage gaps — targeted for improvement as integration testing matures.
 
 | Layer | Technology |
 |-------|------------|
@@ -70,8 +70,11 @@ Swagger UI: http://127.0.0.1:8000/docs
 
 ```bash
 cd backend
-python -m pytest tests/ -v --cov=app --cov-report=term-missing
+python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=50
 ```
+
+- **Current coverage:** 53 tests, 71% coverage (good) — auth, sensor readings, fields, customers, crop cycles, yield plans, and alert services covered. Invoice service, yield service, and vector service are the primary gaps, targeted as integration testing matures.
+
 ## First-time setup
 
 After running migrations, create the first owner account (no auth required — locked out once an owner exists):
@@ -90,20 +93,21 @@ Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted
 
 | Field | Crop | planted_at | Phase on seed date |
 |-------|------|------------|-------------------|
-| Corn Field | Corn | 2026-04-02 | Growing (day 15 of 95) |
-| Soybean Field | Soybeans | 2026-04-07 | Growing (day 10 of 82) |
+| Corn Field | Field Corn | 2026-04-02 | Growing (day 15 of 120) |
+| Soybean Field | Soybeans Group III | 2026-04-07 | Growing (day 10 of 112) |
 
-Greenhouse cycles (tomatoes, arugula) cycle fast enough (~40 days) that fresh seed data can be created at any time without backdating.
+Greenhouse cycles (arugula ~40 days; tomatoes run ~1 year with staggered quarters) can have fresh seed data created at any time without backdating.
 
 ## Needed features
 - Dashboard nav branding — add icon logo and app name above the nav items in the sidenav header, with Default/Light/Dark mode asset switching to match the active theme.
 - Token refresh — the Angular auth interceptor should automatically use the refresh token to obtain a new access token on 401 responses, giving users a rolling session instead of a hard 30-minute logout. MVP blocker for ROI presentations.
-- Sensor data generator service to trigger a sensor readings process on a field/greenhouse for analysis on a configurable schedule (NOAA would be 1 hour interval and skip hours if configuration if value is higher than 1 [look at "range" and "date=today" examples], source could change from "manual" to "NOAA"). can query NOAA query for current station data to get property values as a current substitute. Will need to be able to "fake" the greenhouse effect on temperature and humidity by end of product as part of the process (can change source to "fIoT" to play with the acronym). This is due to lack of pilot clients and actual growing areas with IoT sensors to currently use.
+- Sensor data generator service — polls NOAA on a configurable schedule (default 1-hour interval; skips ticks when interval > 1) for open field readings, shifting source from `manual` to `noaa`. For greenhouses, simulates controlled-environment effects on temperature and humidity and shifts source to `fIoT`. Required because no pilot clients with real IoT hardware exist yet.
 
 ## Future Features
+- Backfill anomaly averaging — when the NWS polling service catches up after downtime, average the backfilled observations over the gap window and run anomaly detection on the result. A confirmed anomaly in the average is a stronger signal than any single reading.
 - Coordinate input format (v1.1) — Add Field currently requires decimal lat/long. Add support for degrees, minutes, and seconds (DMS) input with auto-conversion, as most farm GPS equipment outputs DMS format.
 - User-to-growing-area assignment model — allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
-- Configurable crop phase day admin UI — seeding/growing/harvest day breakdowns are currently product-owned constants; future feature allows per-farm overrides via settings.
+- Configurable crop phase day admin UI — seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
 - IoT reading source — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
 - SMS alert notifications — send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing SendGrid email fan-out.
 
