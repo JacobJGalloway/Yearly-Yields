@@ -1,0 +1,63 @@
+<div class="dashboard">
+  <!-- Chat input row -->
+  <div class="chat-input-row">
+    <mat-form-field appearance="outline" class="chat-field">
+      <mat-label>Ask about your farm...</mat-label>
+      <input
+        matInput
+        [(ngModel)]="chatInput"
+        (keydown.enter)="sendMessage()"
+        [disabled]="chatLoading"
+      />
+    </mat-form-field>
+    <button mat-icon-button color="primary" (click)="sendMessage()" [disabled]="chatLoading || !chatInput.trim()">
+      <mat-icon>send</mat-icon>
+    </button>
+  </div>
+
+  <!-- Chat modal overlay -->
+  @if (chatOpen) {
+    <div class="chat-modal">
+      <button class="chat-close" mat-icon-button (click)="closeChat()">
+        <mat-icon>close</mat-icon>
+      </button>
+      <div class="chat-log" #chatLog>
+        @for (msg of chatHistory; track $index) {
+          <div [class]="'chat-msg chat-msg--' + msg.role">{{ msg.content }}</div>
+        }
+        @if (chatLoading) {
+          <div class="chat-spinner">
+            <mat-spinner diameter="24" />
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Chart grid: sensor full-width / yield+weekly half / yoy full-width -->
+  <div class="chart-grid">
+    <mat-card class="chart-card chart-card--wide">
+      <mat-card-content>
+        <div echarts [options]="sensorTrendOptions" class="chart"></div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card">
+      <mat-card-content>
+        <div echarts [options]="yieldProgressOptions" class="chart"></div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card">
+      <mat-card-content>
+        <div echarts [options]="weeklySummaryOptions" class="chart"></div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card chart-card--wide">
+      <mat-card-content>
+        <div echarts [options]="yoyYieldOptions" class="chart"></div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

@@ -7,6 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.sensor_reading import AssessmentStatus, ReadingSource
 
 
+class WeeklySummaryRead(BaseModel):
+    iso_week: int
+    year: int
+    week_label: str
+    avg_temp_f: Optional[float]
+    avg_humidity_pct: Optional[float]
+    reading_count: int
+    growing_area_id: uuid.UUID
+
+
 class SensorReadingCreate(BaseModel):
     growing_area_id: uuid.UUID
     crop_cycle_id: Optional[uuid.UUID] = None

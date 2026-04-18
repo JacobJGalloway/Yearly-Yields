@@ -4,6 +4,7 @@ from app.api.v1 import (
     admin,
     alerts,
     auth,
+    chat,
     crops,
     customers,
     fields,
@@ -25,3 +26,4 @@ router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 router.include_router(yield_plans.router, prefix="/yield-plans", tags=["yield-plans"])
 router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 router.include_router(admin.router, prefix="/admin", tags=["admin"])
+router.include_router(chat.router, prefix="/agent/chat", tags=["agent"])

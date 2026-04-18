@@ -5,6 +5,7 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { provideStore } from '@ngrx/store';
 import { provideEffects } from '@ngrx/effects';
 import { provideStoreDevtools } from '@ngrx/store-devtools';
+import { provideEchartsCore } from 'ngx-echarts';
 
 import { routes } from './app.routes';
 import { authReducer } from './store/auth/auth.reducer';
@@ -20,5 +21,6 @@ export const appConfig: ApplicationConfig = {
     provideStore({ auth: authReducer }),
     provideEffects(authEffects),
     provideStoreDevtools({ maxAge: 25, logOnly: false }),
+    provideEchartsCore({ echarts: () => import('echarts') }),
   ],
 };

@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.loop import run_anomaly_check
@@ -12,7 +12,7 @@ from app.dependencies import get_current_user
 from app.models.field import GrowingArea
 from app.models.sensor_reading import AssessmentStatus, SensorReading
 from app.models.user import User
-from app.schemas.sensor_reading import SensorReadingCreate, SensorReadingRead
+from app.schemas.sensor_reading import SensorReadingCreate, SensorReadingRead, WeeklySummaryRead
 
 router = APIRouter()
 
@@ -69,3 +69,54 @@ async def list_sensor_readings(
 
     result = await db.execute(query)
     return [SensorReadingRead.model_validate(r) for r in result.scalars().all()]
+
+
+@router.get("/weekly-summary", response_model=List[WeeklySummaryRead])
+async def get_weekly_summary(
+    growing_area_id: Optional[uuid.UUID] = None,
+    weeks: int = Query(default=52, ge=1, le=156),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[WeeklySummaryRead]:
+    area_filter = ""
+    params: dict = {"owner_id": str(current_user.id), "weeks": weeks}
+
+    if growing_area_id is not None:
+        area_filter = "AND sr.growing_area_id = :growing_area_id"
+        params["growing_area_id"] = str(growing_area_id)
+
+    sql = text(f"""
+        SELECT
+            EXTRACT(ISOYEAR FROM sr.read_at)::int AS year,
+            EXTRACT(WEEK FROM sr.read_at)::int    AS iso_week,
+            sr.growing_area_id,
+            AVG(sr.temperature)  AS avg_temp_f,
+            AVG(sr.humidity)     AS avg_humidity_pct,
+            COUNT(*)             AS reading_count
+        FROM sensor_readings sr
+        JOIN growing_areas ga ON ga.id = sr.growing_area_id
+        WHERE ga.owner_id = :owner_id
+          AND sr.read_at >= NOW() - (:weeks * INTERVAL '1 week')
+          {area_filter}
+        GROUP BY
+            EXTRACT(ISOYEAR FROM sr.read_at),
+            EXTRACT(WEEK FROM sr.read_at),
+            sr.growing_area_id
+        ORDER BY year ASC, iso_week ASC
+    """)
+
+    result = await db.execute(sql, params)
+    rows = result.mappings().all()
+
+    return [
+        WeeklySummaryRead(
+            iso_week=int(row["iso_week"]),
+            year=int(row["year"]),
+            week_label=f"Wk {int(row['iso_week'])} {int(row['year'])}",
+            avg_temp_f=float(row["avg_temp_f"]) if row["avg_temp_f"] is not None else None,
+            avg_humidity_pct=float(row["avg_humidity_pct"]) if row["avg_humidity_pct"] is not None else None,
+            reading_count=int(row["reading_count"]),
+            growing_area_id=uuid.UUID(str(row["growing_area_id"])),
+        )
+        for row in rows
+    ]
