@@ -20,7 +20,7 @@ An agricultural monitoring and yield prediction system built for Mid-West farmer
 |------|------|-----------------|
 | Open field (acres) | Field Corn | Standard field corn — hard planting window April–early June (southern IL) |
 | Open field (acres) | Soybeans | Group III (primary) / Group IV; double-crop variant when planted ≥ June 15 |
-| DWC greenhouse (sq ft) | Tennessee Britches Tomato | Indeterminate heirloom; staggered quarter seeding (4 simultaneous cycles); harvest until first frost / shutdown |
+| DWC greenhouse (sq ft) | Tennessee Britches Tomato | Indeterminate heirloom; staggered quarter seeding (4 simultaneous cycles); typically harvest until first frost, then shutdown (one greenhouse will go for full vine life cycle) |
 | DWC greenhouse (sq ft) | Arugula Lettuce | Full leaf (fall/winter/spring) → baby leaf (summer) based on planted_at month |
 
 ### Crop cycle phase timeline chart
