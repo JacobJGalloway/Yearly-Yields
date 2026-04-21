@@ -53,8 +53,10 @@ async def _run_nws_poll() -> None:
             async with AsyncSessionLocal() as db:
                 reading = SensorReading(
                     growing_area_id=area.id,
-                    temperature=raw["temp_f"],
-                    humidity=raw["humidity"],
+                    temperature=raw.get("temp_f"),
+                    humidity=raw.get("humidity"),
+                    wind_speed=raw.get("wind_speed"),
+                    wind_direction=raw.get("wind_direction"),
                     reading_source=source,
                     read_at=raw["observed_at"],
                     received_at=now,

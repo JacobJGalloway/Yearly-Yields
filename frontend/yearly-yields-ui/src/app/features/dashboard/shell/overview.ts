@@ -1,21 +1,37 @@
-import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import { forkJoin } from 'rxjs';
 
-import { CropCycle, CropService } from '../../../core/services/crop.service';
+import { Store } from '@ngrx/store';
+import { Crop, CropCycle, CropService } from '../../../core/services/crop.service';
 import { DashboardService, ChatMessage, WeeklySummary } from '../../../core/services/dashboard.service';
-import { FieldService } from '../../../core/services/field.service';
+import { FieldService, GrowingArea } from '../../../core/services/field.service';
 import { SensorReading } from '../../../core/services/reading.service';
+import { selectUserRole } from '../../../store/auth/auth.selectors';
 
-const CHART_COLORS = ['#2e7d32', '#43a047', '#66bb6a', '#a5d6a7', '#1b5e20', '#81c784', '#388e3c'];
+const CHART_COLORS = [
+  '#4e79a7', // steel blue
+  '#C9A227', // harvest gold (brand)
+  '#e15759', // red
+  '#76b7b2', // teal
+  '#9467bd', // purple
+  '#f28e2b', // orange
+  '#59a14f', // green
+  '#17becf', // cyan
+  '#b07aa1', // mauve
+  '#ff9da7', // pink
+];
 
 @Component({
   selector: 'app-overview',
@@ -23,11 +39,13 @@ const CHART_COLORS = ['#2e7d32', '#43a047', '#66bb6a', '#a5d6a7', '#1b5e20', '#8
   imports: [
     FormsModule,
     MatButtonModule,
+    MatButtonToggleModule,
     MatCardModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatProgressSpinnerModule,
+    MatSelectModule,
     NgxEchartsDirective,
   ],
   templateUrl: './overview.html',
@@ -39,36 +57,125 @@ export class OverviewComponent implements OnInit {
   private cropService = inject(CropService);
   private fieldService = inject(FieldService);
   private dashboardService = inject(DashboardService);
+  private store = inject(Store);
+  private destroyRef = inject(DestroyRef);
 
   chatInput = '';
   chatOpen = false;
   chatLoading = false;
   chatHistory: ChatMessage[] = [];
 
+  sensorLoading = true;
+  cycleLoading = true;
+  weeklyLoading = true;
+  yoyLoading = true;
+
   sensorTrendOptions: EChartsOption = {};
-  yieldProgressOptions: EChartsOption = {};
+  cycleProgressOptions: EChartsOption = {};
   weeklySummaryOptions: EChartsOption = {};
   yoyYieldOptions: EChartsOption = {};
 
+  sensorGroupBy: 'area' | 'station' = 'station'; // overridden by role in ngOnInit
+  selectedAreaIds: string[] = [];
+  allAreas: GrowingArea[] = [];
+
+  allCrops: Crop[] = [];
+
+  private _readings: SensorReading[] = [];
+  private _currentSeasonCycles: CropCycle[] = [];
+  private _areaMap = new Map<string, string>();
+  private _areaStationMap = new Map<string, string>();
+  private _cropMap = new Map<string, string>();
+
+  get openFieldAreas(): GrowingArea[] {
+    return this.allAreas.filter(a => a.area_type === 'open_field');
+  }
+
+  get greenhouseAreas(): GrowingArea[] {
+    return this.allAreas.filter(a => a.area_type === 'dwc_greenhouse');
+  }
+
   ngOnInit(): void {
+    this.store.select(selectUserRole).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(role => {
+      this.sensorGroupBy = role === 'farmer' ? 'area' : 'station';
+    });
+
+    // Phase 1: fast metadata needed by all charts
     forkJoin({
       areas: this.fieldService.list(),
       crops: this.cropService.listCrops(),
-      currentCycles: this.dashboardService.getCurrentSeasonCycles(),
-      readings: this.dashboardService.getRecentReadings(),
-      allCycles: this.dashboardService.getAllCycles(),
-      weeklySummaries: this.dashboardService.getWeeklySummaries(),
-    }).subscribe({
-      next: ({ areas, crops, currentCycles, readings, allCycles, weeklySummaries }) => {
-        const areaMap = new Map(areas.map(a => [a.id, a.name]));
-        const cropMap = new Map(crops.map(c => [c.id, c.name]));
-        this.sensorTrendOptions = this.buildSensorTrendOptions(readings, areaMap);
-        this.yieldProgressOptions = this.buildYieldProgressOptions(currentCycles, areaMap, cropMap);
-        this.weeklySummaryOptions = this.buildWeeklySummaryOptions(weeklySummaries);
-        this.yoyYieldOptions = this.buildYoYYieldOptions(allCycles, cropMap);
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: ({ areas, crops }) => {
+        this.allAreas = areas;
+        this.allCrops = crops;
+        this._areaMap = new Map(areas.map(a => [a.id, a.name]));
+        this._areaStationMap = new Map(areas.map(a => [a.id, a.nws_station_id ?? 'Unknown']));
+        this._cropMap = new Map(crops.map(c => [c.id, c.name]));
+
+        // Phase 2: chart queries fire in parallel — each renders independently
+        this.dashboardService.getCurrentSeasonCycles()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: cycles => {
+              this._currentSeasonCycles = cycles;
+              this.cycleLoading = false;
+              this.cycleProgressOptions = this.buildCropCycleProgressOptions(cycles);
+            },
+            error: () => { this.cycleLoading = false; },
+          });
+
+        this.dashboardService.getRecentReadings()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: readings => {
+              this._readings = readings;
+              this.sensorTrendOptions = this.buildSensorTrendOptions();
+              this.sensorLoading = false;
+            },
+            error: () => { this.sensorLoading = false; },
+          });
+
+        this.dashboardService.getWeeklySummaries()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: summaries => {
+              this.weeklySummaryOptions = this.buildWeeklySummaryOptions(summaries);
+              this.weeklyLoading = false;
+            },
+            error: () => { this.weeklyLoading = false; },
+          });
+
+        this.dashboardService.getAllCycles()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: allCycles => {
+              this.yoyYieldOptions = this.buildYoYYieldOptions(allCycles);
+              this.yoyLoading = false;
+            },
+            error: () => { this.yoyLoading = false; },
+          });
       },
-      error: err => console.error('Dashboard load failed', err),
+      error: err => {
+        console.error('Dashboard metadata load failed', err);
+        this.sensorLoading = false;
+        this.cycleLoading = false;
+        this.weeklyLoading = false;
+        this.yoyLoading = false;
+      },
     });
+  }
+
+  onGroupByChange(): void {
+    this.selectedAreaIds = [];
+    this.sensorTrendOptions = this.buildSensorTrendOptions();
+  }
+
+  rebuildSensorChart(): void {
+    this.sensorTrendOptions = this.buildSensorTrendOptions();
+  }
+
+  rebuildCycleChart(): void {
+    this.cycleProgressOptions = this.buildCropCycleProgressOptions(this._currentSeasonCycles);
   }
 
   sendMessage(): void {
@@ -107,48 +214,82 @@ export class OverviewComponent implements OnInit {
     if (el) el.scrollTop = el.scrollHeight;
   }
 
-  private buildSensorTrendOptions(
-    readings: SensorReading[],
-    areaMap: Map<string, string>,
-  ): EChartsOption {
+  private buildSensorTrendOptions(): EChartsOption {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
-    const recent = readings.filter(r => new Date(r.read_at) >= cutoff);
+    const recent = this._readings.filter(r => new Date(r.read_at) >= cutoff);
 
     if (!recent.length) return this.emptyChart('Sensor Readings — Last 30 Days');
 
-    const byArea = new Map<string, SensorReading[]>();
-    for (const r of recent) {
-      if (!byArea.has(r.growing_area_id)) byArea.set(r.growing_area_id, []);
-      byArea.get(r.growing_area_id)!.push(r);
-    }
-
     const series: any[] = [];
     let colorIdx = 0;
-    for (const [areaId, areaReadings] of byArea) {
-      const sorted = [...areaReadings].sort(
-        (a, b) => new Date(a.read_at).getTime() - new Date(b.read_at).getTime(),
-      );
-      const step = Math.max(1, Math.floor(sorted.length / 200));
-      const sampled = sorted.filter((_, i) => i % step === 0);
-      const name = areaMap.get(areaId) ?? areaId.slice(0, 8);
-      series.push({
-        name,
-        type: 'line',
-        smooth: true,
-        symbol: 'none',
-        color: CHART_COLORS[colorIdx++ % CHART_COLORS.length],
-        data: sampled.map(r => [r.read_at, r.temperature]),
-      });
+
+    if (this.sensorGroupBy === 'station') {
+      const byStation = new Map<string, SensorReading[]>();
+      for (const r of recent) {
+        const station = this._areaStationMap.get(r.growing_area_id) ?? 'Unknown';
+        if (!byStation.has(station)) byStation.set(station, []);
+        byStation.get(station)!.push(r);
+      }
+
+      for (const [station, stationReadings] of byStation) {
+        const byDate = new Map<string, number[]>();
+        for (const r of stationReadings) {
+          const dk = r.read_at.slice(0, 10);
+          if (!byDate.has(dk)) byDate.set(dk, []);
+          byDate.get(dk)!.push(r.temperature);
+        }
+        const data = [...byDate.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([dk, temps]) => [
+            `${dk}T12:00:00.000Z`,
+            +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(2),
+          ]);
+
+        series.push({
+          name: station,
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          color: CHART_COLORS[colorIdx++ % CHART_COLORS.length],
+          data,
+        });
+      }
+    } else {
+      const filterIds = this.selectedAreaIds.length ? new Set(this.selectedAreaIds) : null;
+      const byArea = new Map<string, SensorReading[]>();
+      for (const r of recent) {
+        if (filterIds && !filterIds.has(r.growing_area_id)) continue;
+        if (!byArea.has(r.growing_area_id)) byArea.set(r.growing_area_id, []);
+        byArea.get(r.growing_area_id)!.push(r);
+      }
+
+      for (const [areaId, areaReadings] of byArea) {
+        const sorted = [...areaReadings].sort(
+          (a, b) => new Date(a.read_at).getTime() - new Date(b.read_at).getTime(),
+        );
+        const step = Math.max(1, Math.floor(sorted.length / 200));
+        const sampled = sorted.filter((_, i) => i % step === 0);
+        series.push({
+          name: this._areaMap.get(areaId) ?? areaId.slice(0, 8),
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          emphasis: { focus: 'series' },
+          color: CHART_COLORS[colorIdx++ % CHART_COLORS.length],
+          data: sampled.map(r => [r.read_at, r.temperature]),
+        });
+      }
     }
 
+    const isAreaMode = this.sensorGroupBy === 'area';
     return {
       title: { text: 'Sensor Readings — Last 30 Days', left: 16, top: 8, textStyle: { fontSize: 14 } },
       tooltip: {
-        trigger: 'axis',
+        trigger: isAreaMode ? 'item' : 'axis',
         formatter: (params: any) => {
           const pts = Array.isArray(params) ? params : [params];
-          const d = new Date(pts[0]?.axisValue ?? '').toLocaleDateString();
+          const d = new Date(pts[0]?.axisValue ?? pts[0]?.data?.[0] ?? '').toLocaleDateString();
           return `${d}<br>` + pts.map((x: any) => `${x.marker}${x.seriesName}: ${(+x.value[1]).toFixed(1)}°F`).join('<br>');
         },
       },
@@ -160,47 +301,98 @@ export class OverviewComponent implements OnInit {
     };
   }
 
-  private buildYieldProgressOptions(
-    cycles: CropCycle[],
-    areaMap: Map<string, string>,
-    cropMap: Map<string, string>,
-  ): EChartsOption {
-    const withTarget = cycles.filter(c => c.target_yield != null);
-    if (!withTarget.length) return this.emptyChart('Current Season Yield Progress');
+  private buildCropCycleProgressOptions(cycles: CropCycle[]): EChartsOption {
+    const active = cycles.filter(c => c.status === 'active' && c.crop_id);
+    if (!active.length) return this.emptyChart('Crop Cycle Progress');
 
-    const labels = withTarget.map(c => {
-      const area = areaMap.get(c.growing_area_id) ?? 'Unknown';
-      const crop = c.crop_id ? (cropMap.get(c.crop_id) ?? '') : '';
-      return crop ? `${area} (${crop})` : area;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const PHASE_COLORS: Record<string, string> = {
+      Seeding: '#59a14f',
+      Growing: '#4e79a7',
+      Harvest: '#C9A227',
+    };
+
+    const cropById = new Map<string, Crop>(this.allCrops.map(c => [c.id, c]));
+
+    const rows = active.map(c => {
+      const crop = cropById.get(c.crop_id!);
+      const seedingDays = crop?.seeding_days ?? 10;
+      const growingDays = crop?.growing_days ?? 60;
+      const harvestDays = crop?.harvest_days ?? 20;
+      const totalDays = seedingDays + growingDays + harvestDays;
+
+      const planted = new Date(c.planted_at);
+      planted.setHours(0, 0, 0, 0);
+      const elapsed = Math.min(
+        Math.max(0, Math.floor((today.getTime() - planted.getTime()) / 86_400_000)),
+        totalDays,
+      );
+      const remaining = totalDays - elapsed;
+
+      let phase = 'Seeding';
+      if (elapsed > seedingDays + growingDays) phase = 'Harvest';
+      else if (elapsed > seedingDays) phase = 'Growing';
+
+      const areaName = this._areaMap.get(c.growing_area_id) ?? 'Unknown';
+      const cropName = crop?.name ?? '';
+      const label = cropName ? `${areaName} (${cropName})` : areaName;
+
+      return { label, elapsed, remaining, totalDays, phase, cycle: c };
     });
 
+    const maxDays = Math.max(...rows.map(r => r.totalDays));
+
     return {
-      title: { text: 'Current Season Yield Progress', left: 16, top: 8, textStyle: { fontSize: 14 } },
+      title: { text: 'Crop Cycle Progress', left: 16, top: 8, textStyle: { fontSize: 14 } },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: (params: any) => {
-          const pts = Array.isArray(params) ? params : [params];
-          return pts.map((x: any) => `${x.marker}${x.seriesName}: ${x.value ?? 0}`).join('<br>');
+        formatter: (_params: any) => {
+          const params = Array.isArray(_params) ? _params : [_params];
+          const idx = params[0]?.dataIndex;
+          if (idx == null) return '';
+          const row = rows[idx];
+          const lines = [
+            `<b>${row.label}</b>`,
+            `Phase: ${row.phase}`,
+            `Day ${row.elapsed} of ${row.totalDays}`,
+          ];
+          if (row.cycle.actual_yield != null) {
+            lines.push(`Yield so far: ${row.cycle.actual_yield} ${row.cycle.yield_unit}`);
+          }
+          return lines.join('<br>');
         },
       },
-      legend: { bottom: 0 },
-      grid: { top: 48, bottom: 40, left: 220, right: 60 },
-      xAxis: { type: 'value', name: withTarget[0]?.yield_unit ?? 'units' },
-      yAxis: { type: 'category', data: labels, axisLabel: { width: 200, overflow: 'truncate' as const } },
+      legend: { show: false },
+      grid: { top: 40, bottom: 24, left: 220, right: 60 },
+      xAxis: { type: 'value', max: maxDays, name: 'days', nameLocation: 'end' },
+      yAxis: { type: 'category', data: rows.map(r => r.label), axisLabel: { width: 200, overflow: 'truncate' as const } },
       series: [
         {
-          name: 'Target',
+          name: 'Elapsed',
           type: 'bar',
-          barGap: '-100%',
-          itemStyle: { color: 'rgba(46,125,50,0.15)', borderColor: '#2e7d32', borderWidth: 1 },
-          data: withTarget.map(c => c.target_yield),
+          stack: 'cycle',
+          data: rows.map(r => ({
+            value: r.elapsed,
+            itemStyle: { color: PHASE_COLORS[r.phase] },
+          })),
+          label: {
+            show: true,
+            position: 'inside',
+            formatter: (p: any) => rows[p.dataIndex]?.phase ?? '',
+            color: '#fff',
+            fontSize: 11,
+          },
         },
         {
-          name: 'Actual',
+          name: 'Remaining',
           type: 'bar',
-          itemStyle: { color: '#43a047' },
-          data: withTarget.map(c => c.actual_yield ?? 0),
+          stack: 'cycle',
+          itemStyle: { color: 'rgba(150,150,150,0.15)', borderColor: 'rgba(150,150,150,0.25)', borderWidth: 1 },
+          data: rows.map(r => r.remaining),
+          label: { show: false },
         },
       ],
     };
@@ -223,14 +415,31 @@ export class OverviewComponent implements OnInit {
     const avgHumidity = labels.map(l => avg(byWeek.get(l)!.humidities));
 
     return {
-      title: { text: 'Weekly Sensor Averages', left: 16, top: 8, textStyle: { fontSize: 14 } },
-      tooltip: { trigger: 'axis' },
-      legend: { bottom: 0 },
-      grid: { top: 48, bottom: 40, left: 60, right: 60 },
+      title: {
+        text: 'Weekly Sensor Averages',
+        subtext: '°F  /  %',
+        left: 16,
+        top: 8,
+        textStyle: { fontSize: 14 },
+        subtextStyle: { fontSize: 11, color: '#757575' },
+      },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          const pts = Array.isArray(params) ? params : [params];
+          const week = pts[0]?.axisValue ?? '';
+          const lines = pts.map((x: any) => {
+            const unit = x.seriesName === 'Avg Temp' ? '°F' : '%';
+            return `${x.marker}<b>${x.seriesName}:</b> ${x.value ?? '—'}${unit}`;
+          });
+          return `<b>${week}</b><br>${lines.join('<br>')}`;
+        },
+      },
+      grid: { top: 64, bottom: 24, left: 60, right: 60 },
       xAxis: { type: 'category', data: labels, axisLabel: { rotate: 45, fontSize: 10 } },
       yAxis: [
-        { type: 'value', name: '°F', nameLocation: 'end', axisLabel: { formatter: '{value}°' } },
-        { type: 'value', name: '%', nameLocation: 'end', axisLabel: { formatter: '{value}%' } },
+        { type: 'value', axisLabel: { formatter: '{value}°' } },
+        { type: 'value', axisLabel: { formatter: '{value}%' } },
       ],
       series: [
         {
@@ -238,8 +447,8 @@ export class OverviewComponent implements OnInit {
           type: 'line',
           areaStyle: { opacity: 0.2 },
           smooth: true,
-          symbol: 'none',
-          color: '#2e7d32',
+          symbolSize: 6,
+          color: '#4e79a7',
           yAxisIndex: 0,
           data: avgTemp,
         },
@@ -248,8 +457,8 @@ export class OverviewComponent implements OnInit {
           type: 'line',
           areaStyle: { opacity: 0.15 },
           smooth: true,
-          symbol: 'none',
-          color: '#43a047',
+          symbolSize: 6,
+          color: '#C9A227',
           yAxisIndex: 1,
           data: avgHumidity,
         },
@@ -257,10 +466,7 @@ export class OverviewComponent implements OnInit {
     };
   }
 
-  private buildYoYYieldOptions(
-    cycles: CropCycle[],
-    cropMap: Map<string, string>,
-  ): EChartsOption {
+  private buildYoYYieldOptions(cycles: CropCycle[]): EChartsOption {
     const harvested = cycles.filter(c => c.status === 'harvested' && c.actual_yield != null);
     if (!harvested.length) return this.emptyChart('Year-Over-Year Actual Yields');
 
@@ -268,7 +474,7 @@ export class OverviewComponent implements OnInit {
     const cropIds = [...new Set(harvested.map(c => c.crop_id).filter(Boolean) as string[])];
 
     const series = cropIds.map((cropId, i) => ({
-      name: cropMap.get(cropId) ?? cropId.slice(0, 8),
+      name: this._cropMap.get(cropId) ?? cropId.slice(0, 8),
       type: 'bar' as const,
       color: CHART_COLORS[i % CHART_COLORS.length],
       data: years.map(yr => {

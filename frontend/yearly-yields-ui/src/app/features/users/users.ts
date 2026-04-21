@@ -65,6 +65,13 @@ import { UserDialogComponent } from './user-dialog';
             <button mat-icon-button matTooltip="Edit" (click)="openEdit(u)">
               <mat-icon>edit</mat-icon>
             </button>
+            @if (u.id !== currentUser()?.id) {
+              <button mat-icon-button
+                [matTooltip]="u.is_active ? 'Deactivate' : 'Reactivate'"
+                (click)="toggleActive(u)">
+                <mat-icon>{{ u.is_active ? 'person_off' : 'person' }}</mat-icon>
+              </button>
+            }
           }
         </td>
       </ng-container>
@@ -116,6 +123,10 @@ export class UsersComponent implements OnInit {
     this.dialog.open(UserDialogComponent, {
       data: { isOwner: true },
     }).afterClosed().subscribe(result => { if (result) this.load(); });
+  }
+
+  toggleActive(user: User): void {
+    this.userService.update(user.id, { is_active: !user.is_active }).subscribe(() => this.load());
   }
 
   openEdit(user: User): void {

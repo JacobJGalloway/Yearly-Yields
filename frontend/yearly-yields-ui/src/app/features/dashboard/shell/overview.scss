@@ -93,6 +93,33 @@
 }
 
 .chart {
-  height: 280px;
+  height: 300px;
   width: 100%;
+}
+
+.chart--weekly {
+  height: 340px;
+}
+
+.chart-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+
+  ::ng-deep .mat-mdc-progress-spinner circle {
+    stroke: #C9A227;
+  }
+}
+
+.sensor-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px 0;
+
+  .area-filter-field {
+    width: 260px;
+    margin-bottom: -1.25em;
+  }
 }

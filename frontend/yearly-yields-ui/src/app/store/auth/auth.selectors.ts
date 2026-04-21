@@ -27,3 +27,8 @@ export const selectRefreshToken = createSelector(
   selectAuthState,
   state => state.refreshToken,
 );
+
+export const selectUserRole = createSelector(
+  selectAuthState,
+  state => state.role,
+);

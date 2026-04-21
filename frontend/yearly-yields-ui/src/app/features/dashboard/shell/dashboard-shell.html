@@ -1,8 +1,9 @@
 <mat-sidenav-container class="shell-container">
 
-  <mat-sidenav mode="side" opened class="shell-sidenav">
-    <div class="sidenav-header">
+  <mat-sidenav mode="side" opened [class.shell-sidenav--mobile]="isMobile()" class="shell-sidenav">
+    <div class="sidenav-header" [class.sidenav-header--mobile]="isMobile()">
       <img [src]="logoSrc" alt="Yearly Yields" class="sidenav-logo"
+           [class.sidenav-logo--icon]="isMobile()"
            (click)="openThemePicker()"
            matTooltip="Change display mode"
            style="cursor: pointer;" />
@@ -13,10 +14,13 @@
         <a mat-list-item
            [routerLink]="item.route"
            routerLinkActive="active-link"
-           [matTooltip]="item.label"
+           [class.nav-item--mobile]="isMobile()"
+           [matTooltip]="isMobile() ? item.label : ''"
            matTooltipPosition="right">
           <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-          <span matListItemTitle>{{ item.label }}</span>
+          @if (!isMobile()) {
+            <span matListItemTitle>{{ item.label }}</span>
+          }
         </a>
       }
     </mat-nav-list>

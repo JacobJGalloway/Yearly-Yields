@@ -37,3 +37,20 @@ body {
   height: 100%;
 }
 /* You can add global styles to this file, and also import other style files */
+
+// ── Brand overrides ──────────────────────────────────────────────────────────
+// Harvest gold (#C9A227) on all filled action buttons and table icon buttons.
+
+.mat-mdc-unelevated-button:not([disabled]) {
+  --mdc-filled-button-container-color: #C9A227;
+  --mdc-filled-button-label-text-color: #000;
+  background-color: #C9A227 !important;
+  color: #000 !important;
+}
+
+// Table action icons: harvest gold icon, transparent ripple background
+.mat-mdc-table td .mat-mdc-icon-button {
+  color: #C9A227;
+  --mdc-icon-button-state-layer-color: transparent;
+  background-color: transparent;
+}

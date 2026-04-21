@@ -17,7 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, new_uuid
 
 if TYPE_CHECKING:
-    from app.models.field import GrowingArea
+    from app.models.field import GrowingArea, GrowingAreaPlot
     from app.models.customer import Customer
     from app.models.sensor_reading import SensorReading
     from app.models.historical_summary import HistoricalSummary
@@ -122,6 +122,9 @@ class CropCycle(Base, TimestampMixin):
     growing_area_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("growing_areas.id", ondelete="CASCADE"), nullable=False
     )
+    growing_area_plot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("growing_area_plots.id", ondelete="SET NULL"), nullable=True
+    )
     crop_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("crops.id"), nullable=True
     )
@@ -147,6 +150,9 @@ class CropCycle(Base, TimestampMixin):
     # Relationships
     growing_area: Mapped["GrowingArea"] = relationship(
         "GrowingArea", back_populates="crop_cycles", lazy="select"
+    )
+    growing_area_plot: Mapped[Optional["GrowingAreaPlot"]] = relationship(
+        "GrowingAreaPlot", back_populates="crop_cycles", lazy="select"
     )
     crop: Mapped[Optional["Crop"]] = relationship(
         "Crop",

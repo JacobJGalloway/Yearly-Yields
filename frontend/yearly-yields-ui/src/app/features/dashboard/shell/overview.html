@@ -36,27 +36,77 @@
 
   <!-- Chart grid: sensor full-width / yield+weekly half / yoy full-width -->
   <div class="chart-grid">
+
+    <!-- Sensor trend — full width with controls -->
     <mat-card class="chart-card chart-card--wide">
       <mat-card-content>
-        <div echarts [options]="sensorTrendOptions" class="chart"></div>
+        @if (sensorLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div class="sensor-controls">
+            <mat-button-toggle-group
+              [(ngModel)]="sensorGroupBy"
+              (change)="onGroupByChange()"
+              aria-label="Group readings by"
+            >
+              <mat-button-toggle value="station">By Station</mat-button-toggle>
+              <mat-button-toggle value="area">By Area</mat-button-toggle>
+            </mat-button-toggle-group>
+
+            @if (sensorGroupBy === 'area') {
+              <mat-form-field appearance="outline" class="area-filter-field">
+                <mat-label>Filter Areas</mat-label>
+                <mat-select multiple [(ngModel)]="selectedAreaIds" (ngModelChange)="rebuildSensorChart()">
+                  @if (openFieldAreas.length) {
+                    <mat-optgroup label="Open Fields">
+                      @for (area of openFieldAreas; track area.id) {
+                        <mat-option [value]="area.id">{{ area.name }}</mat-option>
+                      }
+                    </mat-optgroup>
+                  }
+                  @if (greenhouseAreas.length) {
+                    <mat-optgroup label="Greenhouses">
+                      @for (area of greenhouseAreas; track area.id) {
+                        <mat-option [value]="area.id">{{ area.name }}</mat-option>
+                      }
+                    </mat-optgroup>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+          </div>
+          <div echarts [options]="sensorTrendOptions" [autoResize]="true" class="chart"></div>
+        }
       </mat-card-content>
     </mat-card>
 
     <mat-card class="chart-card">
       <mat-card-content>
-        <div echarts [options]="yieldProgressOptions" class="chart"></div>
+        @if (cycleLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div echarts [options]="cycleProgressOptions" [autoResize]="true" class="chart"></div>
+        }
       </mat-card-content>
     </mat-card>
 
-    <mat-card class="chart-card">
+    <mat-card class="chart-card chart-card--weekly">
       <mat-card-content>
-        <div echarts [options]="weeklySummaryOptions" class="chart"></div>
+        @if (weeklyLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div echarts [options]="weeklySummaryOptions" [autoResize]="true" class="chart chart--weekly"></div>
+        }
       </mat-card-content>
     </mat-card>
 
     <mat-card class="chart-card chart-card--wide">
       <mat-card-content>
-        <div echarts [options]="yoyYieldOptions" class="chart"></div>
+        @if (yoyLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div echarts [options]="yoyYieldOptions" [autoResize]="true" class="chart"></div>
+        }
       </mat-card-content>
     </mat-card>
   </div>

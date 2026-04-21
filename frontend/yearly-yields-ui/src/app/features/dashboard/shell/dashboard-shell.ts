@@ -1,5 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -24,6 +25,12 @@ const LOGO_MAP: Record<AppTheme, string> = {
   dark:    'brand/Logo Work Name One Line Dark Mode.svg',
 };
 
+const ICON_MAP: Record<AppTheme, string> = {
+  default: 'brand/Logo Icon Default Mode.png',
+  light:   'brand/Logo Icon Light Mode.png',
+  dark:    'brand/Logo Icon Dark Mode.png',
+};
+
 @Component({
   selector: 'app-dashboard-shell',
   standalone: true,
@@ -44,7 +51,10 @@ const LOGO_MAP: Record<AppTheme, string> = {
 export class DashboardShellComponent implements OnInit {
   private store = inject(Store);
   private dialog = inject(MatDialog);
+  private breakpointObserver = inject(BreakpointObserver);
   readonly themeService = inject(ThemeService);
+
+  isMobile = signal(false);
 
   readonly navItems: NavItem[] = [
     { label: 'Overview',     icon: 'dashboard',       route: '/dashboard/overview'     },
@@ -59,11 +69,16 @@ export class DashboardShellComponent implements OnInit {
   ];
 
   get logoSrc(): string {
-    return LOGO_MAP[this.themeService.theme()];
+    return this.isMobile()
+      ? ICON_MAP[this.themeService.theme()]
+      : LOGO_MAP[this.themeService.theme()];
   }
 
   ngOnInit(): void {
     this.themeService.init();
+    this.breakpointObserver.observe('(max-width: 768px)').subscribe(state => {
+      this.isMobile.set(state.matches);
+    });
   }
 
   openThemePicker(): void {

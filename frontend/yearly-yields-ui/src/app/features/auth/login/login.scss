@@ -3,23 +3,42 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  background-color: #507B6A; // default mode: brand green
+}
+
+:host-context(.app-theme-light) .login-page {
   background-color: var(--mat-sys-surface-container-low);
 }
 
-.login-card {
+:host-context(.app-theme-dark) .login-page {
+  background-color: #3B3A3C;
+}
+
+.login-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
   max-width: 480px;
-  padding: 16px;
 }
 
 .login-logo {
   text-align: center;
-  margin: 1.5em 1em 2em;
+  margin-bottom: 1.5em;
 
   img {
     width: 100%;
     max-width: 400px;
   }
+}
+
+.login-card {
+  width: 100%;
+  padding: 16px;
+}
+
+:host-context(.app-theme-dark) .login-card {
+  background-color: #08060D;
 }
 
 .full-width {
@@ -41,3 +60,4 @@
   font-size: 0.875rem;
   margin-bottom: 8px;
 }
+

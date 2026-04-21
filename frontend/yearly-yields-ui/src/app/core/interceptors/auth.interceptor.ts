@@ -25,7 +25,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             const newAccess = event.headers.get('X-New-Access-Token');
             const newRefresh = event.headers.get('X-New-Refresh-Token');
             if (newAccess && newRefresh) {
-              store.dispatch(AuthActions.loginSuccess({ accessToken: newAccess, refreshToken: newRefresh }));
+              store.dispatch(AuthActions.tokenRefreshed({ accessToken: newAccess, refreshToken: newRefresh }));
             }
           }
         }),
@@ -69,7 +69,7 @@ function handle401(
   return authService.refresh(storedRefresh).pipe(
     switchMap(res => {
       isRefreshing = false;
-      store.dispatch(AuthActions.loginSuccess({
+      store.dispatch(AuthActions.tokenRefreshed({
         accessToken: res.access_token,
         refreshToken: res.refresh_token,
       }));

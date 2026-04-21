@@ -55,6 +55,11 @@ import { CustomerDialogComponent } from './customer-dialog';
           <button mat-icon-button matTooltip="Edit" (click)="openDialog(c)">
             <mat-icon>edit</mat-icon>
           </button>
+          <button mat-icon-button
+            [matTooltip]="c.is_active ? 'Deactivate' : 'Reactivate'"
+            (click)="toggleActive(c)">
+            <mat-icon>{{ c.is_active ? 'person_off' : 'person' }}</mat-icon>
+          </button>
         </td>
       </ng-container>
 
@@ -88,6 +93,10 @@ export class CustomersComponent implements OnInit {
 
   load(): void {
     this.customerService.list().subscribe(c => this.customers.set(c));
+  }
+
+  toggleActive(customer: Customer): void {
+    this.customerService.update(customer.id, { is_active: !customer.is_active }).subscribe(() => this.load());
   }
 
   openDialog(customer?: Customer): void {

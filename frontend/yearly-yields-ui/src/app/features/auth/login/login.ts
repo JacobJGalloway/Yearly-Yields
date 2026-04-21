@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -11,6 +11,13 @@ import { AsyncPipe, NgIf } from '@angular/common';
 import { AuthActions } from '../../../store/auth/auth.actions';
 import { selectAuthError, selectAuthLoading, selectIsAuthenticated } from '../../../store/auth/auth.selectors';
 import { Router } from '@angular/router';
+import { ThemeService, AppTheme } from '../../../core/services/theme.service';
+
+const LOGO_MAP: Record<AppTheme, string> = {
+  default: 'brand/Logo Work Default Mode.png',
+  light:   'brand/Logo Work Light Mode.png',
+  dark:    'brand/Logo Work Dark Mode.png',
+};
 
 @Component({
   selector: 'app-login',
@@ -29,15 +36,16 @@ import { Router } from '@angular/router';
   styleUrl: './login.scss',
 })
 export class LoginComponent implements OnInit {
+  private fb = inject(FormBuilder);
+  private store = inject(Store);
+  private router = inject(Router);
+  readonly themeService = inject(ThemeService);
+
   form: FormGroup;
   loading$: Observable<boolean>;
   error$: Observable<string | null>;
 
-  constructor(
-    private fb: FormBuilder,
-    private store: Store,
-    private router: Router,
-  ) {
+  constructor() {
     this.form = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', Validators.required],
@@ -46,7 +54,12 @@ export class LoginComponent implements OnInit {
     this.error$ = this.store.select(selectAuthError);
   }
 
+  get logoSrc(): string {
+    return LOGO_MAP[this.themeService.theme()];
+  }
+
   ngOnInit(): void {
+    this.themeService.init();
     this.store.select(selectIsAuthenticated).subscribe(isAuth => {
       if (isAuth) this.router.navigate(['/dashboard']);
     });

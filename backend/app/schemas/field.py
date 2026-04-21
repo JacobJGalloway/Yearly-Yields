@@ -2,13 +2,13 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.field import GrowingAreaType
 
 
 class GrowingAreaCreate(BaseModel):
-    name: str
+    name: str = Field(..., max_length=25)
     area_type: GrowingAreaType
     latitude: float
     longitude: float
@@ -22,7 +22,7 @@ class GrowingAreaCreate(BaseModel):
 
 
 class GrowingAreaUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(None, max_length=25)
     is_active: Optional[bool] = None
     area_acres: Optional[float] = None
     area_sqft: Optional[float] = None

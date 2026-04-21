@@ -9,6 +9,7 @@ from app.api.v1 import (
     customers,
     fields,
     invoices,
+    plots,
     sensor_readings,
     users,
     yield_plans,
@@ -19,6 +20,7 @@ router = APIRouter()
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(users.router, prefix="/users", tags=["users"])
 router.include_router(fields.router, prefix="/fields", tags=["fields"])
+router.include_router(plots.router, prefix="/fields/{area_id}/plots", tags=["plots"])
 router.include_router(crops.router, prefix="/crops", tags=["crops"])
 router.include_router(customers.router, prefix="/customers", tags=["customers"])
 router.include_router(sensor_readings.router, prefix="/readings", tags=["readings"])

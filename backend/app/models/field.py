@@ -2,7 +2,7 @@ import uuid
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, Enum as SAEnum, Float, ForeignKey, String
+from sqlalchemy import Boolean, Enum as SAEnum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, new_uuid
@@ -14,6 +14,12 @@ if TYPE_CHECKING:
     from app.models.historical_summary import HistoricalSummary
     from app.models.alert import Alert
     from app.models.yield_plan import YieldPlan
+
+
+class PlotType(str, Enum):
+    dwc_row = "dwc_row"          # vine crops on trellis/rail (tomatoes, microgreens)
+    dwc_box = "dwc_box"          # container/tray crops (lettuce, pineapple, herbs)
+    trial_strip = "trial_strip"  # open field variety trial (future)
 
 
 class GrowingAreaType(str, Enum):
@@ -44,7 +50,7 @@ class GrowingArea(Base, TimestampMixin):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(25), nullable=False)
     area_type: Mapped[GrowingAreaType] = mapped_column(
         SAEnum(GrowingAreaType, name="growingareatype"), nullable=False
     )
@@ -77,4 +83,47 @@ class GrowingArea(Base, TimestampMixin):
     )
     yield_plans: Mapped[List["YieldPlan"]] = relationship(
         "YieldPlan", back_populates="growing_area", lazy="select"
+    )
+    plots: Mapped[List["GrowingAreaPlot"]] = relationship(
+        "GrowingAreaPlot", back_populates="growing_area", lazy="select"
+    )
+
+
+class GrowingAreaPlot(Base, TimestampMixin):
+    """
+    Optional sub-unit within a GrowingArea for tracking individual rows,
+    box sections, or trial strips. Used when staggered seeding patterns
+    or per-row crop rotation history is needed.
+
+    plot_type guide:
+      dwc_row   → vine crops on trellis/rail; use length_ft
+      dwc_box   → container/tray crops (lettuce, pineapple); use area_sqft
+      trial_strip → open field variety trial; use length_ft + width_ft
+    """
+
+    __tablename__ = "growing_area_plots"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    growing_area_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("growing_areas.id", ondelete="CASCADE"), nullable=False
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(25), nullable=False)
+    plot_type: Mapped[PlotType] = mapped_column(
+        SAEnum(PlotType, name="plottype"), nullable=False
+    )
+    length_ft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    width_ft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    area_sqft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Relationships
+    growing_area: Mapped["GrowingArea"] = relationship(
+        "GrowingArea", back_populates="plots", lazy="select"
+    )
+    crop_cycles: Mapped[List["CropCycle"]] = relationship(
+        "CropCycle", back_populates="growing_area_plot", lazy="select"
     )

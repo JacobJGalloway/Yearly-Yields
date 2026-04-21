@@ -20,9 +20,11 @@ class WeeklySummaryRead(BaseModel):
 class SensorReadingCreate(BaseModel):
     growing_area_id: uuid.UUID
     crop_cycle_id: Optional[uuid.UUID] = None
-    temperature: float = Field(..., description="Temperature in °F")
-    humidity: float = Field(..., ge=0.0, le=100.0, description="Relative humidity %")
+    temperature: Optional[float] = Field(None, description="Temperature in °F; null if sensor fault")
+    humidity: Optional[float] = Field(None, ge=0.0, le=100.0, description="Relative humidity %; null if sensor fault")
     ph: Optional[float] = Field(None, ge=0.0, le=14.0, description="pH — DWC only, null for open field")
+    wind_speed: Optional[float] = Field(None, ge=0.0, description="Wind speed in mph; open field / NWS only")
+    wind_direction: Optional[str] = Field(None, max_length=3, description="Compass direction: N/NE/NNE etc.")
     reading_source: ReadingSource
     read_at: datetime
 
@@ -33,9 +35,11 @@ class SensorReadingRead(BaseModel):
     id: uuid.UUID
     growing_area_id: uuid.UUID
     crop_cycle_id: Optional[uuid.UUID]
-    temperature: float
-    humidity: float
+    temperature: Optional[float]
+    humidity: Optional[float]
     ph: Optional[float]
+    wind_speed: Optional[float]
+    wind_direction: Optional[str]
     reading_source: ReadingSource
     read_at: datetime
     received_at: datetime

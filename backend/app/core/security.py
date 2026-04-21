@@ -32,7 +32,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     return _pwd_context.verify(plain, hashed)
 
 
-def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> str:
+def _create_token(subject: str, token_type: str, expires_delta: timedelta, role: str | None = None) -> str:
     expire = datetime.now(timezone.utc) + expires_delta
     payload = {
         "sub": subject,       # user id (UUID as string)
@@ -40,14 +40,17 @@ def _create_token(subject: str, token_type: str, expires_delta: timedelta) -> st
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
+    if role is not None:
+        payload["role"] = role
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_access_token(user_id: str) -> str:
+def create_access_token(user_id: str, role: str | None = None) -> str:
     return _create_token(
         subject=user_id,
         token_type=ACCESS_TOKEN_TYPE,
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        role=role,
     )
 
 

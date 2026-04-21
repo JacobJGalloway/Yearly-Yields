@@ -1,10 +1,11 @@
 <div class="login-page">
+  <div class="login-wrapper">
+    <div class="login-logo">
+      <img [src]="logoSrc" alt="Yearly Yields" />
+    </div>
+
   <mat-card class="login-card">
     <mat-card-content>
-      <div class="login-logo">
-        <img src="brand/Logo Work Default Mode.png" alt="Yearly Yields" />
-      </div>
-
       <form [formGroup]="form" (ngSubmit)="submit()">
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Email</mat-label>
@@ -35,4 +36,5 @@
       </form>
     </mat-card-content>
   </mat-card>
+  </div>
 </div>

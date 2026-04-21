@@ -42,3 +42,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# mkcert local dev certificates — machine-specific, never commit
+*.pem

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,7 @@ router = APIRouter()
 @router.post("/login", response_model=TokenResponse)
 async def login(
     payload: LoginRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     result = await db.execute(select(User).where(User.email == payload.email))
@@ -38,8 +41,11 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    from app.services.catchup_service import run_nws_catchup
+    background_tasks.add_task(run_nws_catchup, uuid.UUID(str(user.id)))
+
     return TokenResponse(
-        access_token=create_access_token(str(user.id)),
+        access_token=create_access_token(str(user.id), role=user.role.value),
         refresh_token=create_refresh_token(str(user.id)),
     )
 

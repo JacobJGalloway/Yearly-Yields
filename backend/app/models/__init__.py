@@ -5,7 +5,7 @@
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, new_uuid  # noqa: F401
 from app.models.user import User, UserRole, Permission, RolePermission  # noqa: F401
-from app.models.field import GrowingArea, GrowingAreaType  # noqa: F401
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit  # noqa: F401
 from app.models.sensor_reading import SensorReading, ReadingSource, AssessmentStatus  # noqa: F401

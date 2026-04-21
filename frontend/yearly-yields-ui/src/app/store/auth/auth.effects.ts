@@ -37,6 +37,18 @@ export const loginSuccessEffect = createEffect(
   { functional: true, dispatch: false },
 );
 
+export const tokenRefreshedEffect = createEffect(
+  (actions$ = inject(Actions)) =>
+    actions$.pipe(
+      ofType(AuthActions.tokenRefreshed),
+      tap(({ accessToken, refreshToken }) => {
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
+      }),
+    ),
+  { functional: true, dispatch: false },
+);
+
 export const logoutEffect = createEffect(
   (actions$ = inject(Actions), router = inject(Router)) =>
     actions$.pipe(

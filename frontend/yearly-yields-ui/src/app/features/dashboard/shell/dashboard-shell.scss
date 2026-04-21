@@ -86,3 +86,46 @@ mat-nav-list {
   padding: 24px;
   overflow-y: auto;
 }
+
+// ── Mobile nav ────────────────────────────────────────────────────────────────
+.shell-sidenav--mobile {
+  width: 64px;
+}
+
+.sidenav-header--mobile {
+  padding: 12px 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.sidenav-logo--icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.nav-item--mobile {
+  border-radius: 50px;
+  margin: 4px 6px;
+  width: 48px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  padding: 0 !important;
+
+  ::ng-deep {
+    .mat-mdc-list-item-unscaled-content,
+    .mdc-list-item__content,
+    .mdc-list-item__start {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100%;
+    }
+
+    mat-icon {
+      margin: 0 auto;
+    }
+  }
+}
