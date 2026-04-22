@@ -6,7 +6,7 @@ An agricultural monitoring and yield prediction system built for Mid-West farmer
 
 ## What it does
 
-- Ingests air temperature, humidity, and pH readings from IoT sensors across fields and greenhouses
+- Ingests various types of sensor readings (i.e. air temperature, humidity, pH level, etc.) from IoT sensors across fields and greenhouses
   > *Note: Real IoT sensor data is not yet available. NWS CO-OP station observations (via api.weather.gov) substitute for open field readings. Greenhouse readings use fIoT simulation — NWS ambient data plus per-building temperature and humidity offsets — to approximate controlled growing environments.*
 - Runs a ReAct agentic loop (Reason + Act) on every reading — pulling historical context via pgvector similarity search, querying live weather from NWS, and deciding whether to raise, update, or resolve alerts
 - Fires email alerts on the first anomaly and every 24 hours until 3 consecutive normal readings resolve the alert
