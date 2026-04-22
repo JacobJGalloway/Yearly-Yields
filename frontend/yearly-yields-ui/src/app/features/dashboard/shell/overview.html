@@ -1,0 +1,183 @@
+<div class="dashboard">
+  <!-- Chat input row -->
+  <div class="chat-input-row">
+    <button
+      mat-icon-button
+      matTooltip="Ask questions about your farm data — sensor trends, crop cycles, harvest history, or active alerts. Answers are pulled directly from your operation's records."
+      matTooltipPosition="right"
+      matTooltipClass="chat-info-tooltip"
+      aria-label="What can I ask?"
+    >
+      <mat-icon>info_outline</mat-icon>
+    </button>
+    <mat-form-field appearance="outline" class="chat-field">
+      <mat-label>Ask about your farm...</mat-label>
+      <input
+        matInput
+        [(ngModel)]="chatInput"
+        (keydown.enter)="sendMessage()"
+        [disabled]="chatLoading"
+      />
+    </mat-form-field>
+    <button mat-icon-button color="primary" (click)="sendMessage()" [disabled]="chatLoading || !chatInput.trim()">
+      <mat-icon>send</mat-icon>
+    </button>
+  </div>
+
+  <!-- Chat response panel -->
+  @if (chatOpen) {
+    <div class="chat-panel">
+      <div class="chat-panel-header">
+        <span class="chat-panel-title">
+          @if (chatLoading) { Thinking... }
+          @else if (chatResponse?.title) { {{ chatResponse!.title }} }
+          @else if (chatResponse?.type === 'text') { Response }
+          @else if (chatResponse?.type === 'clarifying_question') { Follow-up }
+          @else if (chatResponse?.type === 'link') { Reference }
+        </span>
+        <button mat-icon-button (click)="closeChat()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      @if (chatLoading) {
+        <div class="chat-panel-spinner"><mat-spinner diameter="36" /></div>
+      }
+
+      @if (!chatLoading && chatResponse) {
+
+        @if (chatResponse.type === 'chart' && chatResponseOptions) {
+          <div echarts [options]="chatResponseOptions" [autoResize]="true" class="chat-chart"></div>
+        }
+
+        @if (chatResponse.type === 'table' && chatResponse.columns && chatResponse.rows) {
+          <div class="chat-table-wrapper">
+            <table class="chat-table">
+              <thead>
+                <tr>
+                  @for (col of chatResponse.columns; track $index) {
+                    <th>{{ col }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of chatResponse.rows; track $index) {
+                  <tr>
+                    @for (cell of row; track $index) {
+                      <td>{{ cell ?? '—' }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (chatResponse.type === 'link') {
+          <div class="chat-link">
+            <p>{{ chatResponse.content }}</p>
+            <a [href]="chatResponse.url" target="_blank" rel="noopener">
+              {{ chatResponse.url }}
+              <mat-icon class="chat-link-icon">open_in_new</mat-icon>
+            </a>
+          </div>
+        }
+
+        @if (chatResponse.type === 'text') {
+          <p class="chat-text">{{ chatResponse.content }}</p>
+        }
+
+        @if (chatResponse.type === 'clarifying_question') {
+          <div class="chat-clarify">
+            <p>{{ chatResponse.content }}</p>
+            @if (chatResponse.options?.length) {
+              <div class="chat-clarify-options">
+                @for (opt of chatResponse.options; track $index) {
+                  <button mat-stroked-button (click)="sendMessage(opt)">{{ opt }}</button>
+                }
+              </div>
+            }
+          </div>
+        }
+
+      }
+    </div>
+  }
+
+  <!-- Chart grid: sensor full-width / yield+weekly half / yoy full-width -->
+  <div class="chart-grid">
+
+    <!-- Sensor trend — full width with controls -->
+    <mat-card class="chart-card chart-card--wide">
+      <mat-card-content>
+        @if (sensorLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div class="sensor-controls">
+            <mat-button-toggle-group
+              [(ngModel)]="sensorGroupBy"
+              (change)="onGroupByChange()"
+              aria-label="Group readings by"
+            >
+              <mat-button-toggle value="station">By Station</mat-button-toggle>
+              <mat-button-toggle value="area">By Area</mat-button-toggle>
+            </mat-button-toggle-group>
+
+            @if (sensorGroupBy === 'area') {
+              <mat-form-field appearance="outline" class="area-filter-field">
+                <mat-label>Filter Areas</mat-label>
+                <mat-select multiple [(ngModel)]="selectedAreaIds" (ngModelChange)="rebuildSensorChart()">
+                  @if (openFieldAreas.length) {
+                    <mat-optgroup label="Open Fields">
+                      @for (area of openFieldAreas; track area.id) {
+                        <mat-option [value]="area.id">{{ area.name }}</mat-option>
+                      }
+                    </mat-optgroup>
+                  }
+                  @if (greenhouseAreas.length) {
+                    <mat-optgroup label="Greenhouses">
+                      @for (area of greenhouseAreas; track area.id) {
+                        <mat-option [value]="area.id">{{ area.name }}</mat-option>
+                      }
+                    </mat-optgroup>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+          </div>
+          <div echarts [options]="sensorTrendOptions" [autoResize]="true" class="chart"></div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card">
+      <mat-card-content>
+        @if (cycleLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div echarts [options]="cycleProgressOptions" [autoResize]="true" class="chart"></div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card chart-card--weekly">
+      <mat-card-content>
+        @if (weeklyLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div echarts [options]="weeklySummaryOptions" [autoResize]="true" class="chart chart--weekly"></div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card chart-card--wide">
+      <mat-card-content>
+        @if (yoyLoading) {
+          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+        } @else {
+          <div echarts [options]="yoyYieldOptions" [autoResize]="true" class="chart"></div>
+        }
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

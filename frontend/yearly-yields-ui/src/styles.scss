@@ -1,0 +1,55 @@
+@use '@angular/material' as mat;
+@use './styles/tokens' as *;
+
+html {
+  height: 100%;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$cyan-palette,
+        tertiary: mat.$azure-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+
+  // Pin exact brand values over M3's generated tonal roles
+  --mat-sys-primary: var(--yy-field-green);
+  --mat-sys-on-primary: var(--yy-white-board);
+}
+
+body {
+  color-scheme: light;
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+  margin: 0;
+  height: 100%;
+}
+
+// ── Default mode: parchment surface ──────────────────────────────────────────
+// Warm cream backdrop distinguishes default from the stark-white light mode.
+.app-theme-default {
+  --mat-sys-surface:                        var(--yy-parchment);
+  --mat-sys-surface-container-low:          color-mix(in srgb, var(--yy-parchment) 85%, var(--yy-field-green) 15%);
+  --mat-sys-surface-container:              color-mix(in srgb, var(--yy-parchment) 75%, var(--yy-field-green) 25%);
+  --mat-sidenav-content-background-color:   var(--yy-parchment);
+}
+
+// ── Brand overrides ──────────────────────────────────────────────────────────
+// Harvest gold on all filled action buttons and table icon buttons.
+
+.mat-mdc-unelevated-button:not([disabled]) {
+  --mdc-filled-button-container-color: var(--yy-harvest-gold);
+  --mdc-filled-button-label-text-color: var(--yy-text-black);
+  background-color: var(--yy-harvest-gold) !important;
+  color: var(--yy-text-black) !important;
+}
+
+// Table action icons: harvest gold icon, transparent ripple background
+.mat-mdc-table td .mat-mdc-icon-button {
+  color: var(--yy-harvest-gold);
+  --mdc-icon-button-state-layer-color: transparent;
+  background-color: transparent;
+}

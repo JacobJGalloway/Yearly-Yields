@@ -1,0 +1,20 @@
+// ── Yearly Yields brand design tokens ────────────────────────────────────────
+// Single source of truth for all brand colors.
+// SCSS vars ($yy-*) for use inside Sass context (mat.theme, color math).
+// CSS custom properties (--yy-*) for use in component SCSS and templates.
+
+$yy-field-green:  #507B6A;
+$yy-harvest-gold: #C9A227;
+$yy-washed-black: #3B3A3C;
+$yy-text-black:   #08060D;
+$yy-white-board:  #EEEEEE;
+$yy-parchment:    #F4EDD9;
+
+:root {
+  --yy-field-green:  #{$yy-field-green};
+  --yy-harvest-gold: #{$yy-harvest-gold};
+  --yy-washed-black: #{$yy-washed-black};
+  --yy-text-black:   #{$yy-text-black};
+  --yy-white-board:  #{$yy-white-board};
+  --yy-parchment:    #{$yy-parchment};
+}

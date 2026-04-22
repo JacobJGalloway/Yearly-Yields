@@ -1,0 +1,42 @@
+<mat-sidenav-container class="shell-container">
+
+  <mat-sidenav mode="side" opened [class.shell-sidenav--mobile]="isMobile()" class="shell-sidenav">
+    <div class="sidenav-header" [class.sidenav-header--mobile]="isMobile()">
+      <img [src]="logoSrc" alt="Yearly Yields" class="sidenav-logo"
+           [class.sidenav-logo--icon]="isMobile()"
+           (click)="openThemePicker()"
+           matTooltip="Change display mode"
+           style="cursor: pointer;" />
+    </div>
+
+    <mat-nav-list>
+      @for (item of navItems; track item.route) {
+        <a mat-list-item
+           [routerLink]="item.route"
+           routerLinkActive="active-link"
+           [class.nav-item--mobile]="isMobile()"
+           [matTooltip]="isMobile() ? item.label : ''"
+           matTooltipPosition="right">
+          <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+          @if (!isMobile()) {
+            <span matListItemTitle>{{ item.label }}</span>
+          }
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="shell-content">
+    <mat-toolbar class="shell-toolbar">
+      <span class="toolbar-spacer"></span>
+      <button mat-icon-button (click)="logout()" matTooltip="Sign out">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </mat-toolbar>
+
+    <main class="shell-main">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+
+</mat-sidenav-container>
