@@ -40,11 +40,6 @@ def _ms_to_mph(ms: float) -> float:
     return ms * 2.23694
 
 
-def _deg_to_compass(degrees: float) -> str:
-    dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-    return dirs[round(degrees / 22.5) % 16]
-
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 async def poll_latest(station_id: str) -> dict | None:
@@ -76,7 +71,7 @@ async def poll_latest(station_id: str) -> dict | None:
         "temp_f": _c_to_f(temp_c) if temp_c is not None else None,
         "humidity": float(humidity) if humidity is not None else None,
         "wind_speed": round(_ms_to_mph(wind_ms), 1) if wind_ms is not None else None,
-        "wind_direction": _deg_to_compass(wind_deg) if wind_deg is not None else None,
+        "wind_direction": float(wind_deg) if wind_deg is not None else None,
         "observed_at": datetime.fromisoformat(timestamp),
     }
 
@@ -118,7 +113,7 @@ async def fetch_observations_since(station_id: str, since: datetime) -> list[dic
             "temp_f": _c_to_f(temp_c) if temp_c is not None else None,
             "humidity": float(humidity) if humidity is not None else None,
             "wind_speed": round(_ms_to_mph(wind_ms), 1) if wind_ms is not None else None,
-            "wind_direction": _deg_to_compass(wind_deg) if wind_deg is not None else None,
+            "wind_direction": float(wind_deg) if wind_deg is not None else None,
             "observed_at": observed_at,
         })
 
@@ -214,8 +209,12 @@ async def simulate_greenhouse_reading(area: "GrowingArea") -> dict | None:
     """
     if area.target_temp_f is not None:
         return {
-            "temp_f": area.target_temp_f + random.gauss(0, 1.5),
-            "humidity": min(100.0, (area.target_humidity_pct or 65.0) + random.gauss(0, 3.0)),
+            "temp_f": area.target_temp_f + random.gauss(0, settings.FIOT_TEMP_NOISE_STDDEV_F),
+            "humidity": min(
+                100.0,
+                (area.target_humidity_pct or settings.FIOT_DEFAULT_HUMIDITY_PCT)
+                + random.gauss(0, settings.FIOT_HUMIDITY_NOISE_STDDEV_PCT),
+            ),
             "observed_at": datetime.now(timezone.utc),
         }
 

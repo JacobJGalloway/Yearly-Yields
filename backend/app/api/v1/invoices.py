@@ -44,13 +44,16 @@ async def update_invoice_endpoint(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(UserRole.farmer, UserRole.owner)),
 ) -> InvoiceRead:
-    invoice = await update_invoice(
-        invoice_id=invoice_id,
-        db=db,
-        quantity=payload.quantity,
-        notes=payload.notes,
-        status=payload.status,
-    )
+    try:
+        invoice = await update_invoice(
+            invoice_id=invoice_id,
+            db=db,
+            quantity=payload.quantity,
+            notes=payload.notes,
+            status=payload.status,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if invoice is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     return InvoiceRead.model_validate(invoice)

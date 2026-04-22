@@ -21,6 +21,7 @@ from app.core.security import create_access_token, hash_password
 from app.db.session import get_db
 from app.main import app
 from app.models.base import Base
+from app.models.field import GrowingArea, GrowingAreaType
 from app.models.user import User, UserRole
 
 TEST_DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/yearly_yields_test"
@@ -145,6 +146,21 @@ def farmer_token(farmer_user: User) -> str:
 @pytest.fixture
 def hired_hand_token(hired_hand_user: User) -> str:
     return create_access_token(str(hired_hand_user.id))
+
+
+@pytest_asyncio.fixture
+async def growing_area(db: AsyncSession, owner_user: User) -> GrowingArea:
+    area = GrowingArea(
+        owner_id=owner_user.id,
+        name="Test Field",
+        area_type=GrowingAreaType.open_field,
+        latitude=40.1,
+        longitude=-90.2,
+        area_acres=20.0,
+    )
+    db.add(area)
+    await db.flush()
+    return area
 
 
 def auth_headers(token: str) -> dict:

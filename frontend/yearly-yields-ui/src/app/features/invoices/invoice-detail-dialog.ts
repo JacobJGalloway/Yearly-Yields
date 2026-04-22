@@ -82,7 +82,7 @@ const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
     .label { color: var(--mat-sys-on-surface-variant); font-size: 0.8rem; }
     .value { font-weight: 500; }
     .status-draft  { color: var(--mat-sys-on-surface-variant); }
-    .status-sent   { color: var(--mat-sys-tertiary, #c9a227); }
+    .status-sent   { color: var(--mat-sys-tertiary, var(--yy-harvest-gold)); }
     .status-paid   { color: var(--mat-sys-primary); }
     .status-voided { color: var(--mat-sys-error); }
   `],

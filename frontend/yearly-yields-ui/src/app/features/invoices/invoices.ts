@@ -89,7 +89,7 @@ import { InvoiceDetailDialogComponent } from './invoice-detail-dialog';
     .page-header h2 { margin: 0; }
     .invoices-table { width: 100%; }
     .status-draft  { color: var(--mat-sys-on-surface-variant); font-weight: 500; }
-    .status-sent   { color: var(--mat-sys-tertiary, #c9a227); font-weight: 500; }
+    .status-sent   { color: var(--mat-sys-tertiary, var(--yy-harvest-gold)); font-weight: 500; }
     .status-paid   { color: var(--mat-sys-primary); font-weight: 500; }
     .status-voided { color: var(--mat-sys-error); font-weight: 500; }
     .empty-state { color: var(--mat-sys-on-surface-variant); margin-top: 2em; text-align: center; }

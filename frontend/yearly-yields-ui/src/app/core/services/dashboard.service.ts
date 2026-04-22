@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+import { environment } from '../../../environments/environment';
 import { CropCycle } from './crop.service';
 import { SensorReading } from './reading.service';
 
@@ -18,6 +19,25 @@ export interface WeeklySummary {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface ChatSeries {
+  name: string;
+  data: (number | null)[];
+}
+
+export interface ChatResponse {
+  type: 'chart' | 'table' | 'link' | 'clarifying_question' | 'text';
+  content?: string;
+  url?: string;
+  title?: string;
+  chart_type?: 'bar_grouped' | 'bar_stacked' | 'line_multi' | 'bar_single';
+  x_labels?: string[];
+  series?: ChatSeries[];
+  y_axis_label?: string;
+  columns?: string[];
+  rows?: (string | number | null)[][];
+  options?: string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -37,7 +57,7 @@ export class DashboardService {
     return this.http.get<CropCycle[]>(`${this.cyclesBase}`);
   }
 
-  getRecentReadings(limit = 300): Observable<SensorReading[]> {
+  getRecentReadings(limit = environment.dashboardReadingsLimit): Observable<SensorReading[]> {
     const params = new HttpParams().set('limit', limit);
     return this.http.get<SensorReading[]>(`${this.readingsBase}/`, { params });
   }
@@ -47,10 +67,7 @@ export class DashboardService {
     return this.http.get<WeeklySummary[]>(`${this.readingsBase}/weekly-summary`, { params });
   }
 
-  sendChatMessage(
-    message: string,
-    history: ChatMessage[],
-  ): Observable<{ response: string }> {
-    return this.http.post<{ response: string }>(this.chatBase + '/', { message, history });
+  sendChatMessage(message: string, history: ChatMessage[]): Observable<ChatResponse> {
+    return this.http.post<ChatResponse>(this.chatBase + '/', { message, history });
   }
 }

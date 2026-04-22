@@ -1,6 +1,15 @@
 <div class="dashboard">
   <!-- Chat input row -->
   <div class="chat-input-row">
+    <button
+      mat-icon-button
+      matTooltip="Ask questions about your farm data — sensor trends, crop cycles, harvest history, or active alerts. Answers are pulled directly from your operation's records."
+      matTooltipPosition="right"
+      matTooltipClass="chat-info-tooltip"
+      aria-label="What can I ask?"
+    >
+      <mat-icon>info_outline</mat-icon>
+    </button>
     <mat-form-field appearance="outline" class="chat-field">
       <mat-label>Ask about your farm...</mat-label>
       <input
@@ -15,22 +24,83 @@
     </button>
   </div>
 
-  <!-- Chat modal overlay -->
+  <!-- Chat response panel -->
   @if (chatOpen) {
-    <div class="chat-modal">
-      <button class="chat-close" mat-icon-button (click)="closeChat()">
-        <mat-icon>close</mat-icon>
-      </button>
-      <div class="chat-log" #chatLog>
-        @for (msg of chatHistory; track $index) {
-          <div [class]="'chat-msg chat-msg--' + msg.role">{{ msg.content }}</div>
+    <div class="chat-panel">
+      <div class="chat-panel-header">
+        <span class="chat-panel-title">
+          @if (chatLoading) { Thinking... }
+          @else if (chatResponse?.title) { {{ chatResponse!.title }} }
+          @else if (chatResponse?.type === 'text') { Response }
+          @else if (chatResponse?.type === 'clarifying_question') { Follow-up }
+          @else if (chatResponse?.type === 'link') { Reference }
+        </span>
+        <button mat-icon-button (click)="closeChat()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      @if (chatLoading) {
+        <div class="chat-panel-spinner"><mat-spinner diameter="36" /></div>
+      }
+
+      @if (!chatLoading && chatResponse) {
+
+        @if (chatResponse.type === 'chart' && chatResponseOptions) {
+          <div echarts [options]="chatResponseOptions" [autoResize]="true" class="chat-chart"></div>
         }
-        @if (chatLoading) {
-          <div class="chat-spinner">
-            <mat-spinner diameter="24" />
+
+        @if (chatResponse.type === 'table' && chatResponse.columns && chatResponse.rows) {
+          <div class="chat-table-wrapper">
+            <table class="chat-table">
+              <thead>
+                <tr>
+                  @for (col of chatResponse.columns; track $index) {
+                    <th>{{ col }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of chatResponse.rows; track $index) {
+                  <tr>
+                    @for (cell of row; track $index) {
+                      <td>{{ cell ?? '—' }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
         }
-      </div>
+
+        @if (chatResponse.type === 'link') {
+          <div class="chat-link">
+            <p>{{ chatResponse.content }}</p>
+            <a [href]="chatResponse.url" target="_blank" rel="noopener">
+              {{ chatResponse.url }}
+              <mat-icon class="chat-link-icon">open_in_new</mat-icon>
+            </a>
+          </div>
+        }
+
+        @if (chatResponse.type === 'text') {
+          <p class="chat-text">{{ chatResponse.content }}</p>
+        }
+
+        @if (chatResponse.type === 'clarifying_question') {
+          <div class="chat-clarify">
+            <p>{{ chatResponse.content }}</p>
+            @if (chatResponse.options?.length) {
+              <div class="chat-clarify-options">
+                @for (opt of chatResponse.options; track $index) {
+                  <button mat-stroked-button (click)="sendMessage(opt)">{{ opt }}</button>
+                }
+              </div>
+            }
+          </div>
+        }
+
+      }
     </div>
   }
 

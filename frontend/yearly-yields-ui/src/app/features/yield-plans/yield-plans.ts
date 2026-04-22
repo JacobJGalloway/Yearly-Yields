@@ -84,7 +84,7 @@ import { YieldPlanDialogComponent } from './yield-plan-dialog';
     .plans-table { width: 100%; }
     .reasoning-cell { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .confidence-high { color: var(--mat-sys-primary); font-weight: 500; }
-    .confidence-medium { color: var(--mat-sys-tertiary, #c9a227); font-weight: 500; }
+    .confidence-medium { color: var(--mat-sys-tertiary, var(--yy-harvest-gold)); font-weight: 500; }
     .confidence-low { color: var(--mat-sys-error); font-weight: 500; }
     .empty-state { color: var(--mat-sys-on-surface-variant); margin-top: 2em; text-align: center; }
   `],

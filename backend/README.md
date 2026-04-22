@@ -261,6 +261,28 @@ Filter active alerts only via `GET /api/v1/alerts/?active_only=true`.
 
 Roles are assigned at user creation and enforced via JWT claims on every request. The `owner` role has a wildcard permission that bypasses all individual permission checks.
 
+## Data retention
+
+Two background jobs run automatically as asyncio tasks in the FastAPI lifespan — no scheduler or external trigger needed.
+
+**Nightly purge** — runs every 24 hours on startup. Hard-deletes rows from `sensor_readings` where `read_at` is older than `DATA_RETENTION_DAYS` (default 1095 / 3 years). Logs the deleted row count.
+
+**Quarterly summarization** — fires after the nightly purge on dates listed in `SUMMARIZATION_DATES` (default: `03-31`, `06-30`, `09-30`, `12-31`). Aggregates daily readings older than `DAILY_RETENTION_DAYS` (default 90) into `weekly_sensor_summaries` per growing area per week (Sunday–Saturday), then deletes the source rows. Wind direction is averaged using a circular mean to handle the 0/359° wraparound. Rows already summarized are skipped via `ON CONFLICT DO NOTHING`.
+
+Wind direction is stored as degrees (`0.0–359.99`) in both tables. Use `app/core/wind.py` for conversion:
+```python
+from app.core.wind import degrees_to_cardinal, cardinal_to_degrees
+degrees_to_cardinal(247.5)   # → "WSW"
+cardinal_to_degrees("WSW")   # → 247.5
+```
+
+All thresholds are configurable in `.env`:
+```
+DATA_RETENTION_DAYS=1095
+DAILY_RETENTION_DAYS=90
+SUMMARIZATION_DATES=["03-31","06-30","09-30","12-31"]
+```
+
 ## Running migrations after model changes
 
 ```powershell

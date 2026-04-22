@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background-color: #507B6A; // default mode: brand green
+  background-color: var(--yy-field-green);
 }
 
 :host-context(.app-theme-light) .login-page {
@@ -11,7 +11,7 @@
 }
 
 :host-context(.app-theme-dark) .login-page {
-  background-color: #3B3A3C;
+  background-color: var(--yy-washed-black);
 }
 
 .login-wrapper {
@@ -38,7 +38,7 @@
 }
 
 :host-context(.app-theme-dark) .login-card {
-  background-color: #08060D;
+  background-color: var(--yy-text-black);
 }
 
 .full-width {

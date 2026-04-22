@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.historical_summary import HistoricalSummary
     from app.models.alert import Alert
     from app.models.yield_plan import YieldPlan
+    from app.models.weekly_sensor_summary import WeeklySensorSummary
 
 
 class PlotType(str, Enum):
@@ -83,6 +84,9 @@ class GrowingArea(Base, TimestampMixin):
     )
     yield_plans: Mapped[List["YieldPlan"]] = relationship(
         "YieldPlan", back_populates="growing_area", lazy="select"
+    )
+    weekly_summaries: Mapped[List["WeeklySensorSummary"]] = relationship(
+        "WeeklySensorSummary", back_populates="growing_area", lazy="select"
     )
     plots: Mapped[List["GrowingAreaPlot"]] = relationship(
         "GrowingAreaPlot", back_populates="growing_area", lazy="select"

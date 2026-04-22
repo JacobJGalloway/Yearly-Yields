@@ -82,7 +82,7 @@ NgRx is used **only** for auth and alerts. All other domains use service-level s
 
 **Sensor reading pipeline** — `POST /api/v1/readings/` stores the row immediately (status=`pending`) and fires a `BackgroundTask` → `run_anomaly_check()` in `agent/loop.py`. The ReAct loop calls up to 7 tools; `log_reading_assessment` is always the terminal tool. Vector similarity via pgvector (voyage-3 embeddings, 1536-dim) finds the 5 most agronomically similar historical weeks.
 
-**Auth** — JWT access tokens (30 min) + refresh tokens (7 days). `dependencies.py::require_role()` is a factory that gates endpoints by role. Owner role bypasses all permission checks. **Token refresh is not yet wired in the Angular interceptor** — known MVP blocker.
+**Auth** — JWT access tokens (30 min) + refresh tokens (7 days). `dependencies.py::require_role()` is a factory that gates endpoints by role. Owner role bypasses all permission checks. Token refresh is wired in the Angular interceptor — catches 401s, calls `/auth/refresh`, retries the original request. Sliding-window rotation also proactively refreshes via `X-New-Access-Token` / `X-New-Refresh-Token` response headers.
 
 **Crop cycle state machine** (`crop_cycle_transitions.py`):
 ```
@@ -112,8 +112,8 @@ Each test runs inside a rolled-back transaction (outer connection-level savepoin
 
 ## Known gaps / active TODOs
 
-- **v1.1** — Unique name constraint on `GrowingArea` per owner (DB + API 422 validation); `seed_morristown.py` uses name-match deduplication as a workaround
+- **v1.1 (high priority)** — `GrowingArea` uniqueness: composite natural key (nws_station_id + area name + owner initials) makes duplicates practically impossible without a strict DB constraint; add DB unique index + API 422 validation then. `seed_morristown.py` uses name-match deduplication as a workaround until then.
 - `email_service.py` is a stub implementation
-- NOAA CDO historical backfill not yet triggered (requires `NOAA_CDO_TOKEN` in `.env`; call `nws_service.backfill()` directly)
-- Token refresh in Angular interceptor now implemented; CDO backfill scheduler not yet wired
+- **v1.1** — NOAA CDO historical backfill: `nws_service.backfill()` is fully implemented but never triggered automatically. Requires `NOAA_CDO_TOKEN` in `.env` (free token from ncei.noaa.gov/cdo-web/token) and a scheduler or admin endpoint to invoke it. MVP gap covered by synthetic backfill (`seed_sensor_backfill.py`).
+- Data retention: nightly purge (`DATA_RETENTION_DAYS`, default 1095) hard-deletes old `sensor_readings`; quarterly summarization (`SUMMARIZATION_DATES`, default end of each quarter) aggregates daily readings older than `DAILY_RETENTION_DAYS` (default 90) into `weekly_sensor_summaries` then deletes source rows. Both run as asyncio background tasks in the FastAPI lifespan. Year-end weekly summary purge and pgvector purge are v1.1/v1.2.
 - `reading_service.py` stub — NWS polling via lifespan scheduler replaces it for automated readings

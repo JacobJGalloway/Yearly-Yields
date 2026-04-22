@@ -22,9 +22,9 @@ class SensorReadingCreate(BaseModel):
     crop_cycle_id: Optional[uuid.UUID] = None
     temperature: Optional[float] = Field(None, description="Temperature in °F; null if sensor fault")
     humidity: Optional[float] = Field(None, ge=0.0, le=100.0, description="Relative humidity %; null if sensor fault")
-    ph: Optional[float] = Field(None, ge=0.0, le=14.0, description="pH — DWC only, null for open field")
-    wind_speed: Optional[float] = Field(None, ge=0.0, description="Wind speed in mph; open field / NWS only")
-    wind_direction: Optional[str] = Field(None, max_length=3, description="Compass direction: N/NE/NNE etc.")
+    ph: Optional[float] = Field(None, ge=0.0, le=14.0, description="pH level; null if not measured")
+    wind_speed: Optional[float] = Field(None, ge=0.0, description="Wind speed in mph; null if not measured")
+    wind_direction: Optional[float] = Field(None, ge=0.0, lt=360.0, description="Wind direction in degrees (0.0–359.99); null if not measured")
     reading_source: ReadingSource
     read_at: datetime
 
@@ -39,7 +39,7 @@ class SensorReadingRead(BaseModel):
     humidity: Optional[float]
     ph: Optional[float]
     wind_speed: Optional[float]
-    wind_direction: Optional[str]
+    wind_direction: Optional[float]
     reading_source: ReadingSource
     read_at: datetime
     received_at: datetime

@@ -4,25 +4,28 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
-import { forkJoin } from 'rxjs';
+import { forkJoin, switchMap } from 'rxjs';
 
 import { Store } from '@ngrx/store';
 import { Crop, CropCycle, CropService } from '../../../core/services/crop.service';
-import { DashboardService, ChatMessage, WeeklySummary } from '../../../core/services/dashboard.service';
+import { DashboardService, ChatMessage, ChatResponse, WeeklySummary } from '../../../core/services/dashboard.service';
 import { FieldService, GrowingArea } from '../../../core/services/field.service';
 import { SensorReading } from '../../../core/services/reading.service';
 import { selectUserRole } from '../../../store/auth/auth.selectors';
+import { BRAND } from '../../../core/brand';
 
 const CHART_COLORS = [
   '#4e79a7', // steel blue
-  '#C9A227', // harvest gold (brand)
+  '#b07d0e', // deep amber — readable on both parchment and white
   '#e15759', // red
   '#76b7b2', // teal
   '#9467bd', // purple
@@ -41,11 +44,13 @@ const CHART_COLORS = [
     MatButtonModule,
     MatButtonToggleModule,
     MatCardModule,
+    MatChipsModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatProgressSpinnerModule,
     MatSelectModule,
+    MatTooltipModule,
     NgxEchartsDirective,
   ],
   templateUrl: './overview.html',
@@ -64,6 +69,8 @@ export class OverviewComponent implements OnInit {
   chatOpen = false;
   chatLoading = false;
   chatHistory: ChatMessage[] = [];
+  chatResponse: ChatResponse | null = null;
+  chatResponseOptions: EChartsOption | null = null;
 
   sensorLoading = true;
   cycleLoading = true;
@@ -100,63 +107,42 @@ export class OverviewComponent implements OnInit {
       this.sensorGroupBy = role === 'farmer' ? 'area' : 'station';
     });
 
-    // Phase 1: fast metadata needed by all charts
     forkJoin({
       areas: this.fieldService.list(),
       crops: this.cropService.listCrops(),
-    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ areas, crops }) => {
+    }).pipe(
+      switchMap(({ areas, crops }) => {
         this.allAreas = areas;
         this.allCrops = crops;
         this._areaMap = new Map(areas.map(a => [a.id, a.name]));
         this._areaStationMap = new Map(areas.map(a => [a.id, a.nws_station_id ?? 'Unknown']));
         this._cropMap = new Map(crops.map(c => [c.id, c.name]));
 
-        // Phase 2: chart queries fire in parallel — each renders independently
-        this.dashboardService.getCurrentSeasonCycles()
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: cycles => {
-              this._currentSeasonCycles = cycles;
-              this.cycleLoading = false;
-              this.cycleProgressOptions = this.buildCropCycleProgressOptions(cycles);
-            },
-            error: () => { this.cycleLoading = false; },
-          });
+        return forkJoin({
+          cycles:    this.dashboardService.getCurrentSeasonCycles(),
+          readings:  this.dashboardService.getRecentReadings(),
+          summaries: this.dashboardService.getWeeklySummaries(),
+          allCycles: this.dashboardService.getAllCycles(),
+        });
+      }),
+    ).subscribe({
+      next: ({ cycles, readings, summaries, allCycles }) => {
+        this._currentSeasonCycles = cycles;
+        this.cycleProgressOptions = this.buildCropCycleProgressOptions(cycles);
+        this.cycleLoading = false;
 
-        this.dashboardService.getRecentReadings()
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: readings => {
-              this._readings = readings;
-              this.sensorTrendOptions = this.buildSensorTrendOptions();
-              this.sensorLoading = false;
-            },
-            error: () => { this.sensorLoading = false; },
-          });
+        this._readings = readings;
+        this.sensorTrendOptions = this.buildSensorTrendOptions();
+        this.sensorLoading = false;
 
-        this.dashboardService.getWeeklySummaries()
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: summaries => {
-              this.weeklySummaryOptions = this.buildWeeklySummaryOptions(summaries);
-              this.weeklyLoading = false;
-            },
-            error: () => { this.weeklyLoading = false; },
-          });
+        this.weeklySummaryOptions = this.buildWeeklySummaryOptions(summaries);
+        this.weeklyLoading = false;
 
-        this.dashboardService.getAllCycles()
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: allCycles => {
-              this.yoyYieldOptions = this.buildYoYYieldOptions(allCycles);
-              this.yoyLoading = false;
-            },
-            error: () => { this.yoyLoading = false; },
-          });
+        this.yoyYieldOptions = this.buildYoYYieldOptions(allCycles);
+        this.yoyLoading = false;
       },
       error: err => {
-        console.error('Dashboard metadata load failed', err);
+        console.error('Dashboard load failed', err);
         this.sensorLoading = false;
         this.cycleLoading = false;
         this.weeklyLoading = false;
@@ -178,27 +164,31 @@ export class OverviewComponent implements OnInit {
     this.cycleProgressOptions = this.buildCropCycleProgressOptions(this._currentSeasonCycles);
   }
 
-  sendMessage(): void {
-    const msg = this.chatInput.trim();
+  sendMessage(override?: string): void {
+    const msg = (override ?? this.chatInput).trim();
     if (!msg || this.chatLoading) return;
 
     this.chatInput = '';
     this.chatOpen = true;
+    this.chatResponse = null;
+    this.chatResponseOptions = null;
     const historyBeforeSend = [...this.chatHistory];
     this.chatHistory = [...this.chatHistory, { role: 'user', content: msg }];
     this.chatLoading = true;
-    setTimeout(() => this.scrollChatToBottom(), 50);
 
     this.dashboardService.sendChatMessage(msg, historyBeforeSend).subscribe({
       next: res => {
-        this.chatHistory = [...this.chatHistory, { role: 'assistant', content: res.response }];
+        this.chatResponse = res;
+        this.chatResponseOptions = res.type === 'chart' ? this._buildChatChartOptions(res) : null;
+        const summary = this._responseToHistoryText(res);
+        this.chatHistory = [...this.chatHistory, { role: 'assistant', content: summary }];
         this.chatLoading = false;
-        setTimeout(() => this.scrollChatToBottom(), 50);
       },
       error: () => {
+        this.chatResponse = { type: 'text', content: 'Something went wrong. Please try again.' };
         this.chatHistory = [
           ...this.chatHistory,
-          { role: 'assistant', content: 'Something went wrong. Please try again.' },
+          { role: 'assistant', content: 'Error retrieving response.' },
         ];
         this.chatLoading = false;
       },
@@ -207,6 +197,46 @@ export class OverviewComponent implements OnInit {
 
   closeChat(): void {
     this.chatOpen = false;
+    this.chatResponse = null;
+    this.chatResponseOptions = null;
+    this.chatHistory = [];
+  }
+
+  private _responseToHistoryText(res: ChatResponse): string {
+    switch (res.type) {
+      case 'chart': return `[Chart: ${res.title ?? 'data visualization'}]`;
+      case 'table': return `[Table: ${res.title ?? 'data table'}]`;
+      case 'link':  return `[Link provided: ${res.content ?? res.url}]`;
+      case 'clarifying_question': return `[Asked for clarification: ${res.content}]`;
+      default: return res.content ?? '';
+    }
+  }
+
+  private _buildChatChartOptions(res: ChatResponse): EChartsOption {
+    if (!res.x_labels || !res.series) return {};
+
+    const isLine = res.chart_type === 'line_multi';
+
+    return {
+      tooltip: { trigger: 'axis' },
+      legend: { bottom: 0 },
+      grid: { left: 48, right: 16, top: 16, bottom: 48, containLabel: true },
+      xAxis: { type: 'category', data: res.x_labels },
+      yAxis: {
+        type: 'value',
+        name: res.y_axis_label ?? '',
+        nameLocation: 'middle',
+        nameGap: 40,
+      },
+      series: res.series.map((s, i) => ({
+        name: s.name,
+        type: isLine ? 'line' : 'bar',
+        data: s.data,
+        color: CHART_COLORS[i % CHART_COLORS.length],
+        ...(isLine ? { smooth: true, symbolSize: 5 } : {}),
+        ...(res.chart_type === 'bar_stacked' ? { stack: 'total' } : {}),
+      })),
+    };
   }
 
   private scrollChatToBottom(): void {
@@ -235,6 +265,7 @@ export class OverviewComponent implements OnInit {
       for (const [station, stationReadings] of byStation) {
         const byDate = new Map<string, number[]>();
         for (const r of stationReadings) {
+          if (r.temperature == null) continue;
           const dk = r.read_at.slice(0, 10);
           if (!byDate.has(dk)) byDate.set(dk, []);
           byDate.get(dk)!.push(r.temperature);
@@ -246,6 +277,7 @@ export class OverviewComponent implements OnInit {
             +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(2),
           ]);
 
+        if (!data.length) continue;
         series.push({
           name: station,
           type: 'line',
@@ -289,8 +321,13 @@ export class OverviewComponent implements OnInit {
         trigger: isAreaMode ? 'item' : 'axis',
         formatter: (params: any) => {
           const pts = Array.isArray(params) ? params : [params];
-          const d = new Date(pts[0]?.axisValue ?? pts[0]?.data?.[0] ?? '').toLocaleDateString();
-          return `${d}<br>` + pts.map((x: any) => `${x.marker}${x.seriesName}: ${(+x.value[1]).toFixed(1)}°F`).join('<br>');
+          if (!pts.length) return '';
+          const ts = pts[0]?.axisValue ?? pts[0]?.value?.[0] ?? pts[0]?.data?.[0];
+          const d = ts != null ? new Date(ts).toLocaleDateString() : '';
+          return (d ? `${d}<br>` : '') + pts
+            .filter((x: any) => x.value?.[1] != null)
+            .map((x: any) => `${x.marker}${x.seriesName}: ${(+x.value[1]).toFixed(1)}°F`)
+            .join('<br>');
         },
       },
       legend: { bottom: 0, type: 'scroll' },
@@ -311,7 +348,7 @@ export class OverviewComponent implements OnInit {
     const PHASE_COLORS: Record<string, string> = {
       Seeding: '#59a14f',
       Growing: '#4e79a7',
-      Harvest: '#C9A227',
+      Harvest: BRAND.harvestGold,
     };
 
     const cropById = new Map<string, Crop>(this.allCrops.map(c => [c.id, c]));
@@ -458,7 +495,7 @@ export class OverviewComponent implements OnInit {
           areaStyle: { opacity: 0.15 },
           smooth: true,
           symbolSize: 6,
-          color: '#C9A227',
+          color: BRAND.harvestGold,
           yAxisIndex: 1,
           data: avgHumidity,
         },

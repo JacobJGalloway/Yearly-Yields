@@ -53,7 +53,7 @@ Draft invoices sit in review until an owner or farmer sends them. From there the
 | Auth  | JWT (python-jose) + bcrypt + RBAC |
 | Alerts | SendGrid |
 | Weather | NWS CO-OP (api.weather.gov) + NOAA CDO (historical backfill) |
-| Frontend | Angular 21 + Angular Material 3 (green palette) + NgRx |
+| Frontend | Angular 21 + Angular Material 3 (teal/cyan palette, brand token system) + NgRx |
 
 ## Project structure
 
@@ -101,15 +101,36 @@ Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted
 | Morristown GH2 — Bay B | Tennessee Britches Tomato | 2026-03-01 | Growing (day 18 of 80) |
 | Morristown GH2 — Bay C | Arugula Lettuce | 2026-04-01 | Growing (day 3 of 11) |
 
-## Needed features
-- NOAA CDO historical backfill — one-time seed of 3 years of weather history per NWS station. Requires `NOAA_CDO_TOKEN` in `.env` (free at ncei.noaa.gov/cdo-web/token); call `nws_service.backfill('KMOR'/'KMTO', start, end)` directly once the token is set.
-- GrowingArea unique name constraint (v1.1) — enforce unique names per owner at the database and API layer. Currently handled by name-match deduplication in `seed_demo_farms.py`.
+## Data Retention
+
+Sensor data is managed by two background jobs that start automatically with the server — no manual trigger required.
+
+| Job | Schedule | What it does |
+|-----|----------|--------------|
+| Nightly purge | Every 24h | Hard-deletes `sensor_readings` older than `DATA_RETENTION_DAYS` (default 3 years) |
+| Quarterly summarization | End of each quarter (Mar 31, Jun 30, Sep 30, Dec 31) | Aggregates daily readings older than `DAILY_RETENTION_DAYS` (default 90 days) into `weekly_sensor_summaries`, then deletes the source rows |
+
+Weekly summaries store per-area averages for temperature, humidity, pH, wind speed, and wind direction (circular mean). All retention windows are configurable in `.env`. Year-end purge of weekly summaries is planned for v1.1.
 
 ## Future Features
-- Backfill anomaly averaging — when the NWS polling service catches up after downtime, average the backfilled observations over the gap window and run anomaly detection on the result. A confirmed anomaly in the average is a stronger signal than any single reading.
-- Coordinate input format (v1.1) — Add Field currently requires decimal lat/long. Add support for degrees, minutes, and seconds (DMS) input with auto-conversion, as most farm GPS equipment outputs DMS format.
-- User-to-growing-area assignment model — allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
-- Configurable crop phase day admin UI — seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
-- IoT reading source — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
-- SMS alert notifications — send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing SendGrid email fan-out.
+
+### v1.1
+- **NOAA CDO historical backfill (trigger)** — `nws_service.backfill()` is fully implemented but has no automatic trigger. Requires a free `NOAA_CDO_TOKEN` from [ncei.noaa.gov/cdo-web/token](https://www.ncei.noaa.gov/cdo-web/token) added to `.env`, plus a scheduler or one-time admin endpoint to invoke it per station. MVP gap is covered by synthetic sensor data (`seed_sensor_backfill.py`) — real CDO history is not loaded until this is wired up.
+- **Local MCP server** — Expose the Yearly Yields database as MCP tools (`get_crop_ranges`, `get_phase_context`, `get_recent_readings`, `get_active_alert`) so the anomaly check and dashboard chat agents fetch data on demand rather than receiving full context in every API payload. Reduces token cost as fIoT reading volume grows.
+- **Prompt caching** — Add `cache_control` to stable system prompt sections in `agent/loop.py` and `agent/chat.py` using the Anthropic SDK's native caching support. Independent of MCP — quick win that can land first.
+- **Chat session memory** — Persist dashboard chat history between sessions via MCP file-based memory rather than re-sending the full sliding-window message history on each request.
+- **Dashboard spinner race (bug fix)** — On initial load, the navigation redirect occasionally cancels the HTTP chain before data arrives; a click on any nav item or the chat input clears it. Fix requires a route-stable guard or defer-until-stable initialization pattern.
+- **Material chips palette** — Swap the Material 3 tertiary palette from `mat.$azure-palette` to `mat.$amber-palette` so chips, FABs, and secondary action components render in Harvest Gold, completing the brand token system.
+- **Data gap approval modal** — When the NWS backfill detects a gap larger than 7 days, surface a modal asking the farmer to approve or reject a historical fill. Currently the system fills silently up to 7 days and logs a warning beyond that.
+- **Year-end weekly yield summary purge** — Aggregate `weekly_sensor_summaries` older than one year into annual summaries, then delete the weekly source rows. Completes the data retention pipeline (nightly purge → quarterly summarization → annual roll-up).
+- **GrowingArea unique name constraint** — Enforce unique names per owner at the database and API layer (unique index + 422 on conflict). Currently handled by name-match deduplication in `seed_demo_farms.py`.
+- **Coordinate input format** — Add Field currently requires decimal lat/long. Add support for degrees, minutes, and seconds (DMS) input with auto-conversion, as most farm GPS equipment outputs DMS format.
+- **Backfill anomaly averaging** — When the NWS polling service catches up after downtime, average the backfilled observations over the gap window and run anomaly detection on the result. A confirmed anomaly in the average is a stronger signal than any single reading.
+
+### v1.2
+- **pgvector embedding purge** — Remove voyage-3 embeddings from `pgvector` for sensor readings that have been deleted or rolled into weekly summaries, preventing the vector store from growing unboundedly.
+- **User-to-growing-area assignment model** — Allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
+- **Configurable crop phase day admin UI** — Seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
+- **IoT reading source** — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
+- **SMS alert notifications** — Send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing SendGrid email fan-out.
 

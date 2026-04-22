@@ -1,15 +1,25 @@
 """
-Conversational dashboard chat agent — read-only farm advisor.
+Conversational dashboard chat agent — read-only farm data analyst.
 
 Accepts a user message + prior conversation history, calls Claude with a set of
-read-only tools, and returns a plain-text response. No alerts are created or modified.
+read-only data-query tools and terminal render tools, and returns a structured
+response dict describing how the frontend should display the answer.
+
+Response types:
+  chart             — ngx-echarts visualization (bar_grouped, line_multi, etc.)
+  table             — column/row data table
+  link              — external reference URL
+  clarifying_question — follow-up question from Claude before it can answer
+  text              — plain text (simple questions, "I don't know", errors)
 """
 
 import uuid
+from datetime import date, datetime
 from typing import Any
 
 import anthropic
-from sqlalchemy import select, desc
+from anthropic import BadRequestError, APIStatusError
+from sqlalchemy import select, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.prompts import DASHBOARD_CHAT_SYSTEM_PROMPT
@@ -18,12 +28,16 @@ from app.models.alert import Alert, AlertStatus
 from app.models.crop import Crop, CropCycle, CropCycleStatus
 from app.models.field import GrowingArea
 from app.models.sensor_reading import SensorReading
+from app.models.weekly_sensor_summary import WeeklySensorSummary
 
 _client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-MAX_ITERATIONS = 5
+MAX_ITERATIONS = 8
+
+_RENDER_TOOLS = {"render_chart", "render_table", "provide_link", "ask_clarification"}
 
 _CHAT_TOOLS = [
+    # ── Existing data tools ───────────────────────────────────────────────────
     {
         "name": "get_active_cycles",
         "description": "Retrieve all active crop cycles for this farm with crop name and planting details.",
@@ -48,6 +62,191 @@ _CHAT_TOOLS = [
         "description": "Retrieve all currently active anomaly alerts.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
+    # ── New date-range query tools ────────────────────────────────────────────
+    {
+        "name": "query_sensor_readings",
+        "description": (
+            "Query raw sensor readings for a date range. Best for recent data (last few weeks). "
+            "For longer historical ranges use query_weekly_summaries instead."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "metric": {
+                    "type": "string",
+                    "enum": ["temperature", "humidity", "ph", "wind_speed"],
+                    "description": "The sensor metric to retrieve.",
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in YYYY-MM-DD format (inclusive).",
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in YYYY-MM-DD format (inclusive).",
+                },
+                "area_name": {
+                    "type": "string",
+                    "description": "Optional growing area name filter (partial match, case-insensitive).",
+                },
+            },
+            "required": ["metric", "start_date", "end_date"],
+        },
+    },
+    {
+        "name": "query_weekly_summaries",
+        "description": (
+            "Query weekly-aggregated sensor data. Best for year-over-year comparisons and "
+            "multi-month trend analysis. Returns one row per area per week."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "metric": {
+                    "type": "string",
+                    "enum": ["avg_temperature", "avg_humidity", "avg_ph", "avg_wind_speed"],
+                    "description": "The aggregated metric to retrieve.",
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in YYYY-MM-DD format (inclusive).",
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in YYYY-MM-DD format (inclusive).",
+                },
+                "area_name": {
+                    "type": "string",
+                    "description": "Optional growing area name filter (partial match, case-insensitive).",
+                },
+            },
+            "required": ["metric", "start_date", "end_date"],
+        },
+    },
+    {
+        "name": "query_harvest_history",
+        "description": "Query actual harvest yields across completed crop cycles.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "crop_name": {
+                    "type": "string",
+                    "description": "Optional crop name filter (partial match, case-insensitive).",
+                },
+                "start_year": {
+                    "type": "integer",
+                    "description": "First season year to include (inclusive).",
+                },
+                "end_year": {
+                    "type": "integer",
+                    "description": "Last season year to include (inclusive).",
+                },
+            },
+            "required": [],
+        },
+    },
+    # ── Terminal render tools ─────────────────────────────────────────────────
+    {
+        "name": "render_chart",
+        "description": (
+            "Render a chart as the final answer. Call this when data is best shown as a "
+            "visualization. chart_type options: bar_grouped (multiple series side-by-side), "
+            "bar_stacked (stacked bars), line_multi (one line per series), bar_single (one series)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Chart title shown above the chart."},
+                "chart_type": {
+                    "type": "string",
+                    "enum": ["bar_grouped", "bar_stacked", "line_multi", "bar_single"],
+                },
+                "x_labels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "X-axis category labels (weeks, months, years, etc.).",
+                },
+                "series": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "data": {
+                                "type": "array",
+                                "items": {"type": ["number", "null"]},
+                            },
+                        },
+                        "required": ["name", "data"],
+                    },
+                    "description": "Data series — one per year, crop, or area.",
+                },
+                "y_axis_label": {
+                    "type": "string",
+                    "description": "Y-axis unit label (e.g. '°F', '%', 'bushels/acre').",
+                },
+            },
+            "required": ["title", "chart_type", "x_labels", "series"],
+        },
+    },
+    {
+        "name": "render_table",
+        "description": "Render a data table as the final answer. Use when listing records is clearer than a chart.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "columns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Column header labels.",
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {"type": "array"},
+                    "description": "Table rows — each row is an array matching the columns order.",
+                },
+            },
+            "required": ["title", "columns", "rows"],
+        },
+    },
+    {
+        "name": "provide_link",
+        "description": (
+            "Provide an external reference link when the answer exists outside this system "
+            "(e.g. NOAA weather history, university extension guides, market prices)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "Short description of what this link provides.",
+                },
+                "url": {"type": "string", "description": "The full URL."},
+            },
+            "required": ["text", "url"],
+        },
+    },
+    {
+        "name": "ask_clarification",
+        "description": (
+            "Ask the user a follow-up question when you need more information to choose "
+            "the right response type or data scope."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string"},
+                "options": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional suggested answer choices to show the user.",
+                },
+            },
+            "required": ["question"],
+        },
+    },
 ]
 
 
@@ -56,13 +255,29 @@ async def run_chat(
     history: list[dict],
     db: AsyncSession,
     owner_id: str,
-) -> str:
+) -> dict[str, Any]:
     messages = [*history, {"role": "user", "content": message}]
 
+    try:
+        return await _run_chat_loop(messages, db, owner_id)
+    except BadRequestError as e:
+        msg = e.body.get("error", {}).get("message", str(e)) if isinstance(e.body, dict) else str(e)
+        return {"type": "text", "content": f"AI service error: {msg}"}
+    except APIStatusError as e:
+        return {"type": "text", "content": f"AI service unavailable (HTTP {e.status_code}). Please try again later."}
+    except Exception:
+        return {"type": "text", "content": "An unexpected error occurred. Please try again."}
+
+
+async def _run_chat_loop(
+    messages: list[dict],
+    db: AsyncSession,
+    owner_id: str,
+) -> dict[str, Any]:
     for _ in range(MAX_ITERATIONS):
         response = await _client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
+            model=settings.CLAUDE_MODEL,
+            max_tokens=2048,
             system=DASHBOARD_CHAT_SYSTEM_PROMPT,
             tools=_CHAT_TOOLS,
             messages=messages,
@@ -71,23 +286,59 @@ async def run_chat(
         if response.stop_reason == "end_turn":
             for block in response.content:
                 if block.type == "text":
-                    return block.text
-            return "I wasn't able to generate a response."
+                    return {"type": "text", "content": block.text}
+            return {"type": "text", "content": "I wasn't able to generate a response."}
 
         if response.stop_reason == "tool_use":
             messages.append({"role": "assistant", "content": response.content})
             tool_results = []
             for block in response.content:
-                if block.type == "tool_use":
-                    result = await _dispatch(block.name, block.input, db, owner_id)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": str(result),
-                    })
-            messages.append({"role": "user", "content": tool_results})
+                if block.type != "tool_use":
+                    continue
+                if block.name in _RENDER_TOOLS:
+                    return _build_render_response(block.name, block.input)
+                result = await _dispatch(block.name, block.input, db, owner_id)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": str(result),
+                })
+            if tool_results:
+                messages.append({"role": "user", "content": tool_results})
 
-    return "I wasn't able to complete your request within the allowed steps."
+    return {"type": "text", "content": "I wasn't able to complete your request within the allowed steps."}
+
+
+def _build_render_response(tool_name: str, inp: dict) -> dict[str, Any]:
+    if tool_name == "render_chart":
+        return {
+            "type": "chart",
+            "title": inp.get("title", ""),
+            "chart_type": inp.get("chart_type", "bar_grouped"),
+            "x_labels": inp.get("x_labels", []),
+            "series": inp.get("series", []),
+            "y_axis_label": inp.get("y_axis_label"),
+        }
+    if tool_name == "render_table":
+        return {
+            "type": "table",
+            "title": inp.get("title", ""),
+            "columns": inp.get("columns", []),
+            "rows": inp.get("rows", []),
+        }
+    if tool_name == "provide_link":
+        return {
+            "type": "link",
+            "content": inp.get("text", ""),
+            "url": inp.get("url", ""),
+        }
+    if tool_name == "ask_clarification":
+        return {
+            "type": "clarifying_question",
+            "content": inp.get("question", ""),
+            "options": inp.get("options", []),
+        }
+    return {"type": "text", "content": "Unknown response type."}
 
 
 async def _dispatch(
@@ -99,8 +350,16 @@ async def _dispatch(
         return await _get_recent_readings(db, owner_id, min(int(inp.get("limit", 20)), 50))
     if name == "get_active_alerts":
         return await _get_active_alerts(db, owner_id)
+    if name == "query_sensor_readings":
+        return await _query_sensor_readings(db, owner_id, inp)
+    if name == "query_weekly_summaries":
+        return await _query_weekly_summaries(db, owner_id, inp)
+    if name == "query_harvest_history":
+        return await _query_harvest_history(db, owner_id, inp)
     return {"error": f"Unknown tool: {name}"}
 
+
+# ── Data handlers ─────────────────────────────────────────────────────────────
 
 async def _get_active_cycles(db: AsyncSession, owner_id: str) -> dict:
     result = await db.execute(
@@ -116,7 +375,6 @@ async def _get_active_cycles(db: AsyncSession, owner_id: str) -> dict:
     rows = result.all()
     if not rows:
         return {"status": "no_data", "cycles": []}
-
     return {
         "status": "ok",
         "cycles": [
@@ -145,7 +403,6 @@ async def _get_recent_readings(db: AsyncSession, owner_id: str, limit: int) -> d
     rows = result.all()
     if not rows:
         return {"status": "no_data", "readings": []}
-
     return {
         "status": "ok",
         "readings": [
@@ -175,7 +432,6 @@ async def _get_active_alerts(db: AsyncSession, owner_id: str) -> dict:
     rows = result.all()
     if not rows:
         return {"active_alerts": []}
-
     return {
         "active_alerts": [
             {
@@ -186,5 +442,138 @@ async def _get_active_alerts(db: AsyncSession, owner_id: str) -> dict:
                 "summary": alert.assessment_summary,
             }
             for alert, area in rows
+        ],
+    }
+
+
+async def _query_sensor_readings(
+    db: AsyncSession, owner_id: str, inp: dict
+) -> dict:
+    metric = inp["metric"]
+    start = date.fromisoformat(inp["start_date"])
+    end = date.fromisoformat(inp["end_date"])
+    area_filter = inp.get("area_name", "").strip().lower()
+
+    metric_col = getattr(SensorReading, metric, None)
+    if metric_col is None:
+        return {"error": f"Unknown metric: {metric}"}
+
+    conditions = [
+        GrowingArea.owner_id == uuid.UUID(owner_id),
+        SensorReading.read_at >= datetime(start.year, start.month, start.day),
+        SensorReading.read_at < datetime(end.year, end.month, end.day + 1),
+        metric_col.isnot(None),
+    ]
+
+    result = await db.execute(
+        select(SensorReading.read_at, metric_col, GrowingArea.name)
+        .join(GrowingArea, SensorReading.growing_area_id == GrowingArea.id)
+        .where(and_(*conditions))
+        .order_by(SensorReading.read_at)
+        .limit(500)
+    )
+    rows = result.all()
+
+    if area_filter:
+        rows = [r for r in rows if area_filter in r[2].lower()]
+
+    if not rows:
+        return {"status": "no_data", "readings": []}
+
+    return {
+        "status": "ok",
+        "metric": metric,
+        "readings": [
+            {"read_at": r[0].isoformat(), "value": r[1], "area_name": r[2]}
+            for r in rows
+        ],
+    }
+
+
+async def _query_weekly_summaries(
+    db: AsyncSession, owner_id: str, inp: dict
+) -> dict:
+    metric = inp["metric"]
+    start = date.fromisoformat(inp["start_date"])
+    end = date.fromisoformat(inp["end_date"])
+    area_filter = inp.get("area_name", "").strip().lower()
+
+    metric_col = getattr(WeeklySensorSummary, metric, None)
+    if metric_col is None:
+        return {"error": f"Unknown metric: {metric}"}
+
+    result = await db.execute(
+        select(WeeklySensorSummary.week_start, metric_col, GrowingArea.name)
+        .join(GrowingArea, WeeklySensorSummary.growing_area_id == GrowingArea.id)
+        .where(
+            GrowingArea.owner_id == uuid.UUID(owner_id),
+            WeeklySensorSummary.week_start >= start,
+            WeeklySensorSummary.week_start <= end,
+            metric_col.isnot(None),
+        )
+        .order_by(WeeklySensorSummary.week_start)
+    )
+    rows = result.all()
+
+    if area_filter:
+        rows = [r for r in rows if area_filter in r[2].lower()]
+
+    if not rows:
+        return {"status": "no_data", "summaries": []}
+
+    return {
+        "status": "ok",
+        "metric": metric,
+        "summaries": [
+            {"week_start": r[0].isoformat(), "value": r[1], "area_name": r[2]}
+            for r in rows
+        ],
+    }
+
+
+async def _query_harvest_history(
+    db: AsyncSession, owner_id: str, inp: dict
+) -> dict:
+    crop_filter = inp.get("crop_name", "").strip().lower()
+    start_year = inp.get("start_year")
+    end_year = inp.get("end_year")
+
+    conditions = [
+        GrowingArea.owner_id == uuid.UUID(owner_id),
+        CropCycle.status == CropCycleStatus.harvested,
+        CropCycle.actual_yield.isnot(None),
+    ]
+    if start_year:
+        conditions.append(CropCycle.season_year >= start_year)
+    if end_year:
+        conditions.append(CropCycle.season_year <= end_year)
+
+    result = await db.execute(
+        select(CropCycle, Crop, GrowingArea)
+        .join(GrowingArea, CropCycle.growing_area_id == GrowingArea.id)
+        .outerjoin(Crop, CropCycle.crop_id == Crop.id)
+        .where(and_(*conditions))
+        .order_by(CropCycle.season_year, CropCycle.harvested_at)
+    )
+    rows = result.all()
+
+    if crop_filter:
+        rows = [r for r in rows if crop_filter in (r[1].name if r[1] else "").lower()]
+
+    if not rows:
+        return {"status": "no_data", "cycles": []}
+
+    return {
+        "status": "ok",
+        "cycles": [
+            {
+                "area_name": area.name,
+                "crop_name": crop.name if crop else "unknown",
+                "season_year": cycle.season_year,
+                "actual_yield": cycle.actual_yield,
+                "yield_unit": cycle.yield_unit.value,
+                "harvested_at": cycle.harvested_at.isoformat() if cycle.harvested_at else None,
+            }
+            for cycle, crop, area in rows
         ],
     }

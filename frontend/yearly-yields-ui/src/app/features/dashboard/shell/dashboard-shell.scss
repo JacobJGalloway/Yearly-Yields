@@ -4,7 +4,7 @@
 
 .shell-sidenav {
   width: 220px;
-  background-color: #507B6A;
+  background-color: var(--yy-field-green);
   border-right: 1px solid var(--mat-sys-outline-variant);
 }
 
@@ -13,7 +13,7 @@
 }
 
 :host-context(.app-theme-dark) .shell-sidenav {
-  background-color: #3B3A3C;
+  background-color: var(--yy-washed-black);
 }
 
 .sidenav-header {
@@ -32,7 +32,7 @@
 mat-nav-list {
   .mdc-list-item__primary-text,
   mat-icon {
-    color: #C9A227;
+    color: var(--yy-harvest-gold);
   }
 }
 
@@ -55,11 +55,11 @@ mat-nav-list {
 }
 
 :host-context(.app-theme-light) .active-link {
-  background-color: #507B6A;
-  color: #C9A227;
+  background-color: var(--yy-field-green);
+  color: var(--yy-harvest-gold);
 
   mat-icon {
-    color: #C9A227;
+    color: var(--yy-harvest-gold);
   }
 }
 

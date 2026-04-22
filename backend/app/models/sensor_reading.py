@@ -2,7 +2,7 @@ import uuid
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import DateTime, Enum as SAEnum, Float, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Enum as SAEnum, Float, ForeignKey, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, new_uuid
@@ -56,9 +56,9 @@ class SensorReading(Base, CreatedAtMixin):
     )
     temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)      # °F; null if sensor fault
     humidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)        # % (0.0–100.0); null if sensor fault
-    ph: Mapped[Optional[float]] = mapped_column(Float, nullable=True)              # DWC only; null for open field
-    wind_speed: Mapped[Optional[float]] = mapped_column(Float, nullable=True)      # mph; open field / NWS only
-    wind_direction: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)  # compass: N/NE/NNE etc.
+    ph: Mapped[Optional[float]] = mapped_column(Float, nullable=True)              # 0.0–14.0; null if not measured
+    wind_speed: Mapped[Optional[float]] = mapped_column(Float, nullable=True)      # mph; null if not measured
+    wind_direction: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # degrees 0.0–359.99; null if not measured
     reading_source: Mapped[ReadingSource] = mapped_column(
         SAEnum(ReadingSource, name="readingsource"), nullable=False
     )
