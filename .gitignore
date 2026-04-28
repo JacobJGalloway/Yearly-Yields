@@ -214,3 +214,6 @@ frontend/yearly-yields-ui/.angular/
 # IDE
 .vscode/
 .idea/
+
+# Local dev SSL certs (not tracked — copy manually on fresh setup)
+frontend_local_backup/
