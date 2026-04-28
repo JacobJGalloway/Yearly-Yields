@@ -400,3 +400,38 @@ async def test_hired_hand_cannot_view_invoices(
 ):
     response = await client.get("/api/v1/invoices/", headers=auth_headers(hired_hand_token))
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_list_invoices_returns_invoices(
+    client: AsyncClient, owner_token: str, draft_invoice: Invoice
+):
+    response = await client.get("/api/v1/invoices/", headers=auth_headers(owner_token))
+    assert response.status_code == 200
+    ids = [i["id"] for i in response.json()]
+    assert str(draft_invoice.id) in ids
+
+
+@pytest.mark.asyncio
+async def test_get_invoice_success(
+    client: AsyncClient, owner_token: str, draft_invoice: Invoice
+):
+    response = await client.get(
+        f"/api/v1/invoices/{draft_invoice.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(draft_invoice.id)
+    assert response.json()["status"] == "draft"
+
+
+@pytest.mark.asyncio
+async def test_update_invoice_not_found_returns_404(
+    client: AsyncClient, owner_token: str
+):
+    response = await client.patch(
+        f"/api/v1/invoices/{uuid.uuid4()}",
+        json={"quantity": 100.0},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404

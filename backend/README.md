@@ -166,7 +166,7 @@ Authorization: Bearer <token>
   "crop_cycle_id": "<uuid>",       // optional
   "temperature": 95.5,             // °F
   "humidity": 22.0,                // % (0–100)
-  "reading_source": "manual",      // manual | noaa | sensor
+  "reading_source": "manual",      // manual | nws | fiot | sensor
   "read_at": "2026-04-16T08:00:00Z"
 }
 ```

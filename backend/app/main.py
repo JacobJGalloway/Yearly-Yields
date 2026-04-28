@@ -233,6 +233,17 @@ async def _summarize_old_readings() -> None:
     )
 
 
+async def _phase_check_loop(interval_hours: int) -> None:
+    from app.services.phase_alert_service import run_phase_check
+    await run_phase_check()
+    while True:
+        await asyncio.sleep(interval_hours * 3600)
+        try:
+            await run_phase_check()
+        except Exception:
+            logger.exception("Daily phase check failed")
+
+
 async def _purge_loop() -> None:
     while True:
         try:
@@ -254,11 +265,13 @@ async def lifespan(app: FastAPI):
     poll_task = asyncio.create_task(_poll_loop(settings.NWS_POLL_INTERVAL_HOURS))
     purge_task = asyncio.create_task(_purge_loop())
     fiot_task = asyncio.create_task(_fiot_loop(settings.FIOT_POLL_INTERVAL_HOURS))
+    phase_task = asyncio.create_task(_phase_check_loop(settings.PHASE_CHECK_INTERVAL_HOURS))
     yield
     backfill_task.cancel()
     poll_task.cancel()
     purge_task.cancel()
     fiot_task.cancel()
+    phase_task.cancel()
     await engine.dispose()
 
 

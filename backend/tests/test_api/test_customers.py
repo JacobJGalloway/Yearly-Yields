@@ -118,3 +118,51 @@ async def test_update_customer(client: AsyncClient, owner_token: str):
     data = response.json()
     assert data["name"] == "Green Valley Updated"
     assert data["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_customer_success(client: AsyncClient, owner_token: str):
+    create = await client.post(
+        "/api/v1/customers/",
+        json=CUSTOMER_PAYLOAD,
+        headers=auth_headers(owner_token),
+    )
+    customer_id = create.json()["id"]
+
+    response = await client.get(
+        f"/api/v1/customers/{customer_id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "Green Valley Co-op"
+
+
+@pytest.mark.asyncio
+async def test_update_customer_not_found(client: AsyncClient, owner_token: str):
+    import uuid
+    response = await client.patch(
+        f"/api/v1/customers/{uuid.uuid4()}",
+        json={"name": "Ghost"},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_customer_email_and_phone(client: AsyncClient, owner_token: str):
+    create = await client.post(
+        "/api/v1/customers/",
+        json=CUSTOMER_PAYLOAD,
+        headers=auth_headers(owner_token),
+    )
+    customer_id = create.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/customers/{customer_id}",
+        json={"email": "new@example.com", "phone": "555-9999"},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["email"] == "new@example.com"
+    assert data["phone"] == "555-9999"

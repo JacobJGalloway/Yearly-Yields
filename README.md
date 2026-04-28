@@ -59,7 +59,7 @@ Draft invoices sit in review until an owner or farmer sends them. From there the
 
 ```
 backend/    FastAPI API, ORM models, agent loop, services
-frontend/   Angular UI (scaffold in progress)
+frontend/   Angular UI (Angular 21 + Material 3 + NgRx)
 docker/     PostgreSQL + pgvector container config
 ```
 
@@ -73,7 +73,7 @@ cd backend
 python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=50
 ```
 
-- **Current coverage:** 53 tests, 71% coverage (good) — auth, sensor readings, fields, customers, crop cycles, yield plans, and alert services covered. Invoice service, yield service, and vector service are the primary gaps, targeted as integration testing matures.
+- **Current coverage:** 282 tests, 87.76% — all service and API layers covered. Remaining gap is in `main.py` lifespan code and `agent/chat.py` streaming loop, which require integration-level infrastructure to cover meaningfully.
 
 ## First-time setup
 

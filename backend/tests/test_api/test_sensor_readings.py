@@ -112,3 +112,126 @@ async def test_create_reading_unauthenticated(
 ):
     response = await client.post("/api/v1/readings/", json=reading_payload)
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_readings_returns_created_reading(
+    client: AsyncClient,
+    owner_token: str,
+    reading_payload: dict,
+):
+    await client.post(
+        "/api/v1/readings/",
+        json=reading_payload,
+        headers=auth_headers(owner_token),
+    )
+    response = await client.get("/api/v1/readings/", headers=auth_headers(owner_token))
+    assert response.status_code == 200
+    assert len(response.json()) >= 1
+    assert all("temperature" in r for r in response.json())
+
+
+@pytest.mark.asyncio
+async def test_list_readings_filter_by_growing_area(
+    client: AsyncClient,
+    owner_token: str,
+    reading_payload: dict,
+    growing_area: GrowingArea,
+):
+    await client.post(
+        "/api/v1/readings/",
+        json=reading_payload,
+        headers=auth_headers(owner_token),
+    )
+    response = await client.get(
+        f"/api/v1/readings/?growing_area_id={growing_area.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 1
+    assert all(r["growing_area_id"] == str(growing_area.id) for r in data)
+
+
+@pytest.mark.asyncio
+async def test_list_readings_filter_by_assessment_status(
+    client: AsyncClient,
+    owner_token: str,
+    reading_payload: dict,
+):
+    await client.post(
+        "/api/v1/readings/",
+        json=reading_payload,
+        headers=auth_headers(owner_token),
+    )
+    response = await client.get(
+        "/api/v1/readings/?assessment_status=pending",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert all(r["assessment_status"] == "pending" for r in response.json())
+
+
+@pytest.mark.asyncio
+async def test_list_readings_unauthenticated(client: AsyncClient):
+    response = await client.get("/api/v1/readings/")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_readings_empty_for_different_owner(
+    client: AsyncClient,
+    farmer_token: str,
+    reading_payload: dict,
+    owner_token: str,
+):
+    # Create reading as owner, list as farmer (no readings owned by farmer)
+    await client.post(
+        "/api/v1/readings/",
+        json=reading_payload,
+        headers=auth_headers(owner_token),
+    )
+    response = await client.get("/api/v1/readings/", headers=auth_headers(farmer_token))
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_weekly_summary_returns_valid_structure(
+    client: AsyncClient,
+    owner_token: str,
+    reading_payload: dict,
+):
+    await client.post(
+        "/api/v1/readings/",
+        json=reading_payload,
+        headers=auth_headers(owner_token),
+    )
+    response = await client.get(
+        "/api/v1/readings/weekly-summary",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    if data:
+        entry = data[0]
+        assert "iso_week" in entry
+        assert "year" in entry
+        assert "week_label" in entry
+        assert "avg_temp_f" in entry
+        assert "reading_count" in entry
+
+
+@pytest.mark.asyncio
+async def test_weekly_summary_empty_for_unknown_area(
+    client: AsyncClient,
+    owner_token: str,
+):
+    import uuid
+    response = await client.get(
+        f"/api/v1/readings/weekly-summary?growing_area_id={uuid.uuid4()}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.json() == []

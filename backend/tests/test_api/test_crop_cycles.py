@@ -287,3 +287,258 @@ async def test_hired_hand_cannot_update_cycle(
         headers=auth_headers(hired_hand_token),
     )
     assert response.status_code == 403
+
+
+# ── List / Get / Create tests ─────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_list_crops_returns_computed_fields(
+    client: AsyncClient, owner_token: str, corn: Crop
+):
+    """GET /api/v1/crops/ exercises CropRead.seeding_days / growing_days / sub_phases."""
+    response = await client.get("/api/v1/crops/", headers=auth_headers(owner_token))
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 1
+    crop = next((c for c in data if c["name"] == "corn"), None)
+    assert crop is not None
+    assert crop["seeding_days"] == 10
+    assert crop["growing_days"] == 132
+    assert isinstance(crop["sub_phases"], list)
+    assert len(crop["sub_phases"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_list_crop_cycles_returns_cycles(
+    client: AsyncClient, owner_token: str, active_corn_cycle: CropCycle
+):
+    response = await client.get("/api/v1/crops/cycles", headers=auth_headers(owner_token))
+    assert response.status_code == 200
+    ids = [c["id"] for c in response.json()]
+    assert str(active_corn_cycle.id) in ids
+
+
+@pytest.mark.asyncio
+async def test_list_crop_cycles_filter_by_growing_area(
+    client: AsyncClient, owner_token: str, active_corn_cycle: CropCycle, open_field: GrowingArea
+):
+    response = await client.get(
+        f"/api/v1/crops/cycles?growing_area_id={open_field.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert all(c["growing_area_id"] == str(open_field.id) for c in response.json())
+
+
+@pytest.mark.asyncio
+async def test_list_crop_cycles_filter_by_status(
+    client: AsyncClient, owner_token: str, active_corn_cycle: CropCycle, fallow_cycle: CropCycle
+):
+    response = await client.get(
+        "/api/v1/crops/cycles?status=fallow",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert all(c["status"] == "fallow" for c in response.json())
+    assert str(fallow_cycle.id) in [c["id"] for c in response.json()]
+
+
+@pytest.mark.asyncio
+async def test_list_crop_cycles_filter_by_season_year(
+    client: AsyncClient, owner_token: str, active_corn_cycle: CropCycle
+):
+    response = await client.get(
+        "/api/v1/crops/cycles?season_year=2026",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert all(c["season_year"] == 2026 for c in response.json())
+
+
+@pytest.mark.asyncio
+async def test_get_crop_cycle_returns_crop_name(
+    client: AsyncClient, owner_token: str, active_corn_cycle: CropCycle
+):
+    response = await client.get(
+        f"/api/v1/crops/cycles/{active_corn_cycle.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == str(active_corn_cycle.id)
+    assert data["crop_name"] == "corn"
+
+
+@pytest.mark.asyncio
+async def test_get_crop_cycle_not_found(client: AsyncClient, owner_token: str):
+    import uuid
+    response = await client.get(
+        f"/api/v1/crops/cycles/{uuid.uuid4()}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_crop_cycle_success(
+    client: AsyncClient, owner_token: str, open_field: GrowingArea, corn: Crop
+):
+    response = await client.post(
+        "/api/v1/crops/cycles",
+        headers=auth_headers(owner_token),
+        json={
+            "growing_area_id": str(open_field.id),
+            "crop_id": str(corn.id),
+            "season_year": 2026,
+            "cycle_number": 99,
+            "planted_at": "2026-04-01",
+            "yield_unit": "bushels",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["crop_name"] == "corn"
+    assert data["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_create_cycle_greenhouse_incompatible_crop_rejected(
+    client: AsyncClient, owner_token: str, greenhouse: GrowingArea, corn: Crop
+):
+    response = await client.post(
+        "/api/v1/crops/cycles",
+        headers=auth_headers(owner_token),
+        json={
+            "growing_area_id": str(greenhouse.id),
+            "crop_id": str(corn.id),
+            "season_year": 2026,
+            "cycle_number": 99,
+            "planted_at": "2026-04-01",
+            "yield_unit": "bushels",
+        },
+    )
+    assert response.status_code == 422
+    assert "greenhouse" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_current_phase_seeding(
+    client: AsyncClient, owner_token: str, open_field: GrowingArea, corn: Crop
+):
+    from datetime import date, timedelta
+    # corn seeding = 10 days; 5 days in → seeding
+    planted = (date.today() - timedelta(days=5)).isoformat()
+    response = await client.post(
+        "/api/v1/crops/cycles",
+        headers=auth_headers(owner_token),
+        json={
+            "growing_area_id": str(open_field.id),
+            "crop_id": str(corn.id),
+            "season_year": 2026,
+            "cycle_number": 98,
+            "planted_at": planted,
+            "yield_unit": "bushels",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["current_phase"] == "seeding"
+    assert data["current_sub_phase"] is not None
+
+
+@pytest.mark.asyncio
+async def test_current_phase_harvest(
+    client: AsyncClient, owner_token: str, open_field: GrowingArea, corn: Crop
+):
+    from datetime import date, timedelta
+    # corn harvest threshold = day 142; 150 days in → harvest
+    planted = (date.today() - timedelta(days=150)).isoformat()
+    response = await client.post(
+        "/api/v1/crops/cycles",
+        headers=auth_headers(owner_token),
+        json={
+            "growing_area_id": str(open_field.id),
+            "crop_id": str(corn.id),
+            "season_year": 2025,
+            "cycle_number": 1,
+            "planted_at": planted,
+            "yield_unit": "bushels",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["current_phase"] == "harvest"
+
+
+@pytest.mark.asyncio
+async def test_current_phase_none_for_fallow(
+    client: AsyncClient, owner_token: str, fallow_cycle: CropCycle
+):
+    response = await client.get(
+        f"/api/v1/crops/cycles/{fallow_cycle.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["current_phase"] is None
+    assert data["current_sub_phase"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_crop_cycle_area_not_found(
+    client: AsyncClient, owner_token: str, corn: Crop
+):
+    import uuid
+    response = await client.post(
+        "/api/v1/crops/cycles",
+        headers=auth_headers(owner_token),
+        json={
+            "growing_area_id": str(uuid.uuid4()),
+            "crop_id": str(corn.id),
+            "season_year": 2026,
+            "cycle_number": 50,
+            "planted_at": "2026-04-01",
+            "yield_unit": "bushels",
+        },
+    )
+    assert response.status_code == 404
+    assert "growing area" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_create_crop_cycle_crop_not_found(
+    client: AsyncClient, owner_token: str, open_field: GrowingArea
+):
+    import uuid
+    response = await client.post(
+        "/api/v1/crops/cycles",
+        headers=auth_headers(owner_token),
+        json={
+            "growing_area_id": str(open_field.id),
+            "crop_id": str(uuid.uuid4()),
+            "season_year": 2026,
+            "cycle_number": 51,
+            "planted_at": "2026-04-01",
+            "yield_unit": "bushels",
+        },
+    )
+    assert response.status_code == 404
+    assert "crop" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_update_cycle_fields(
+    client: AsyncClient, owner_token: str, active_corn_cycle: CropCycle
+):
+    from datetime import date
+    response = await client.patch(
+        f"/api/v1/crops/cycles/{active_corn_cycle.id}",
+        headers=auth_headers(owner_token),
+        json={
+            "target_yield": 6000.0,
+            "forecasted_end_date": "2026-10-01",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["target_yield"] == 6000.0
+    assert data["forecasted_end_date"] == "2026-10-01"

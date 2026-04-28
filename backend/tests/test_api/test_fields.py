@@ -131,3 +131,93 @@ async def test_list_fields_returns_only_own_areas(
     response = await client.get("/api/v1/fields/", headers=auth_headers(farmer_token))
     assert response.status_code == 200
     assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_get_field_by_id(client: AsyncClient, owner_token: str):
+    create_resp = await client.post(
+        "/api/v1/fields/",
+        json={
+            "name": "Get Test Field",
+            "area_type": "open_field",
+            "latitude": 41.0,
+            "longitude": -90.0,
+            "area_acres": 15.0,
+        },
+        headers=auth_headers(owner_token),
+    )
+    assert create_resp.status_code == 201
+    area_id = create_resp.json()["id"]
+
+    response = await client.get(f"/api/v1/fields/{area_id}", headers=auth_headers(owner_token))
+    assert response.status_code == 200
+    assert response.json()["name"] == "Get Test Field"
+
+
+@pytest.mark.asyncio
+async def test_get_field_not_found(client: AsyncClient, owner_token: str):
+    import uuid
+    response = await client.get(
+        f"/api/v1/fields/{uuid.uuid4()}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_field_name(client: AsyncClient, owner_token: str):
+    create_resp = await client.post(
+        "/api/v1/fields/",
+        json={
+            "name": "Old Name",
+            "area_type": "open_field",
+            "latitude": 41.0,
+            "longitude": -90.0,
+            "area_acres": 10.0,
+        },
+        headers=auth_headers(owner_token),
+    )
+    area_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/fields/{area_id}",
+        json={"name": "New Name"},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "New Name"
+
+
+@pytest.mark.asyncio
+async def test_deactivate_field(client: AsyncClient, owner_token: str):
+    create_resp = await client.post(
+        "/api/v1/fields/",
+        json={
+            "name": "Active Field",
+            "area_type": "dwc_greenhouse",
+            "latitude": 41.0,
+            "longitude": -90.0,
+            "area_sqft": 800.0,
+        },
+        headers=auth_headers(owner_token),
+    )
+    area_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/fields/{area_id}",
+        json={"is_active": False},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.json()["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_field_not_found(client: AsyncClient, owner_token: str):
+    import uuid
+    response = await client.patch(
+        f"/api/v1/fields/{uuid.uuid4()}",
+        json={"name": "Ghost"},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404

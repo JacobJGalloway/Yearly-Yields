@@ -21,6 +21,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import settings
+from app.core.wind import degrees_to_cardinal as _deg_to_compass
 
 if TYPE_CHECKING:
     from app.models.field import GrowingArea

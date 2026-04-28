@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.dependencies import get_current_user, require_role
+from app.models.alert import Alert, AlertStatus, AlertType
 from app.models.crop import Crop, CropCycle, CropCycleStatus
 from app.models.field import GrowingArea, GrowingAreaType
 from app.models.user import User, UserRole
@@ -15,6 +17,27 @@ from app.services.crop_cycle_transitions import InvalidTransitionError, validate
 from app.services.invoice_service import create_draft_invoice
 
 router = APIRouter()
+
+
+def _cycle_to_dict(cycle: CropCycle, crop_name: Optional[str]) -> dict:
+    return {
+        "id": cycle.id,
+        "growing_area_id": cycle.growing_area_id,
+        "crop_id": cycle.crop_id,
+        "planned_crop_id": cycle.planned_crop_id,
+        "season_year": cycle.season_year,
+        "cycle_number": cycle.cycle_number,
+        "planted_at": cycle.planted_at,
+        "harvested_at": cycle.harvested_at,
+        "forecasted_end_date": cycle.forecasted_end_date,
+        "yield_unit": cycle.yield_unit,
+        "target_yield": cycle.target_yield,
+        "actual_yield": cycle.actual_yield,
+        "status": cycle.status,
+        "created_at": cycle.created_at,
+        "updated_at": cycle.updated_at,
+        "crop_name": crop_name,
+    }
 
 
 @router.get("/", response_model=List[CropRead])
@@ -32,6 +55,7 @@ async def create_crop_cycle(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(UserRole.farmer, UserRole.owner)),
 ) -> CropCycleRead:
+    crop = None
     if payload.crop_id is not None:
         area_result = await db.execute(
             select(GrowingArea).where(GrowingArea.id == payload.growing_area_id)
@@ -65,7 +89,7 @@ async def create_crop_cycle(
     db.add(cycle)
     await db.commit()
     await db.refresh(cycle)
-    return CropCycleRead.model_validate(cycle)
+    return CropCycleRead.model_validate(_cycle_to_dict(cycle, crop.name if crop else None))
 
 
 @router.get("/cycles", response_model=List[CropCycleRead])
@@ -77,8 +101,9 @@ async def list_crop_cycles(
     current_user: User = Depends(get_current_user),
 ) -> List[CropCycleRead]:
     query = (
-        select(CropCycle)
-        .join(CropCycle.growing_area)
+        select(CropCycle, Crop.name.label("crop_name"))
+        .join(GrowingArea, CropCycle.growing_area_id == GrowingArea.id)
+        .outerjoin(Crop, CropCycle.crop_id == Crop.id)
         .where(GrowingArea.owner_id == current_user.id)
     )
     if growing_area_id is not None:
@@ -89,7 +114,8 @@ async def list_crop_cycles(
         query = query.where(CropCycle.status == status)
 
     result = await db.execute(query)
-    return [CropCycleRead.model_validate(c) for c in result.scalars().all()]
+    rows = result.all()
+    return [CropCycleRead.model_validate(_cycle_to_dict(row.CropCycle, row.crop_name)) for row in rows]
 
 
 @router.get("/cycles/{cycle_id}", response_model=CropCycleRead)
@@ -98,11 +124,15 @@ async def get_crop_cycle(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> CropCycleRead:
-    result = await db.execute(select(CropCycle).where(CropCycle.id == cycle_id))
-    cycle = result.scalar_one_or_none()
-    if cycle is None:
+    result = await db.execute(
+        select(CropCycle, Crop.name.label("crop_name"))
+        .outerjoin(Crop, CropCycle.crop_id == Crop.id)
+        .where(CropCycle.id == cycle_id)
+    )
+    row = result.one_or_none()
+    if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Crop cycle not found")
-    return CropCycleRead.model_validate(cycle)
+    return CropCycleRead.model_validate(_cycle_to_dict(row.CropCycle, row.crop_name))
 
 
 @router.patch("/cycles/{cycle_id}", response_model=CropCycleRead)
@@ -119,6 +149,7 @@ async def update_crop_cycle(
 
     transitioning_to_harvested = False
     transitioning_to_transplanted = False
+    transitioning_to_terminal = False
 
     if payload.status is not None and payload.status != cycle.status:
         try:
@@ -132,7 +163,6 @@ async def update_crop_cycle(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Cannot activate a fallow cycle with no planned_crop_id set.",
                 )
-            # Enforce greenhouse compatibility for the planned crop
             area_result = await db.execute(
                 select(GrowingArea).where(GrowingArea.id == cycle.growing_area_id)
             )
@@ -149,9 +179,9 @@ async def update_crop_cycle(
 
         if payload.status == CropCycleStatus.harvested:
             transitioning_to_harvested = True
+            transitioning_to_terminal = True
 
         if payload.status == CropCycleStatus.transplanted:
-            # Only greenhouse crops have a transplant customer
             crop_result = await db.execute(select(Crop).where(Crop.id == cycle.crop_id))
             crop = crop_result.scalar_one_or_none()
             if crop is None or not crop.greenhouse_compatible:
@@ -160,6 +190,10 @@ async def update_crop_cycle(
                     detail="Transplanted status is only valid for greenhouse crops.",
                 )
             transitioning_to_transplanted = True
+            transitioning_to_terminal = True
+
+        if payload.status == CropCycleStatus.abandoned:
+            transitioning_to_terminal = True
 
         cycle.status = payload.status
 
@@ -177,10 +211,29 @@ async def update_crop_cycle(
     await db.commit()
     await db.refresh(cycle)
 
+    if transitioning_to_terminal:
+        alert_result = await db.execute(
+            select(Alert).where(
+                Alert.crop_cycle_id == cycle_id,
+                Alert.alert_type == AlertType.harvest_ready,
+                Alert.status == AlertStatus.active,
+            )
+        )
+        harvest_alert = alert_result.scalar_one_or_none()
+        if harvest_alert:
+            harvest_alert.status = AlertStatus.resolved
+            harvest_alert.resolved_at = datetime.now(timezone.utc)
+            await db.commit()
+
     if transitioning_to_harvested:
         await create_draft_invoice(cycle.id, db)
 
     if transitioning_to_transplanted:
         await create_draft_invoice(cycle.id, db, use_transplant_customer=True)
 
-    return CropCycleRead.model_validate(cycle)
+    crop_name = None
+    if cycle.crop_id:
+        r = await db.execute(select(Crop.name).where(Crop.id == cycle.crop_id))
+        crop_name = r.scalar_one_or_none()
+
+    return CropCycleRead.model_validate(_cycle_to_dict(cycle, crop_name))

@@ -19,6 +19,7 @@ class AlertType(str, Enum):
     humidity_high = "humidity_high"
     humidity_low = "humidity_low"
     combined = "combined"
+    harvest_ready = "harvest_ready"
 
 
 class AlertStatus(str, Enum):
@@ -57,8 +58,8 @@ class Alert(Base, TimestampMixin):
     crop_cycle_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("crop_cycles.id"), nullable=True
     )
-    triggering_reading_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("sensor_readings.id"), nullable=False
+    triggering_reading_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("sensor_readings.id"), nullable=True
     )
     alert_type: Mapped[AlertType] = mapped_column(
         SAEnum(AlertType, name="alerttype"), nullable=False
@@ -86,6 +87,6 @@ class Alert(Base, TimestampMixin):
     crop_cycle: Mapped[Optional["CropCycle"]] = relationship(
         "CropCycle", back_populates="alerts", lazy="select"
     )
-    triggering_reading: Mapped["SensorReading"] = relationship(
+    triggering_reading: Mapped[Optional["SensorReading"]] = relationship(
         "SensorReading", back_populates="alerts", lazy="select"
     )

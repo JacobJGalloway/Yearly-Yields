@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from app.core.crop_phases import get_phase_days
+from app.core.crop_phases import get_phase_days, get_sub_phase
 from app.models.crop import CropCycleStatus, YieldUnit
 
 
@@ -83,3 +83,26 @@ class CropCycleRead(BaseModel):
     status: CropCycleStatus
     created_at: datetime
     updated_at: datetime
+    crop_name: Optional[str] = None
+
+    @computed_field
+    @property
+    def current_phase(self) -> Optional[str]:
+        if self.status != CropCycleStatus.active or self.crop_name is None:
+            return None
+        days_in = (date.today() - self.planted_at).days
+        pd = get_phase_days(self.crop_name, self.planted_at, self.forecasted_end_date)
+        if days_in < pd.seeding_days:
+            return "seeding"
+        if days_in < pd.seeding_days + pd.growing_days:
+            return "growing"
+        return "harvest"
+
+    @computed_field
+    @property
+    def current_sub_phase(self) -> Optional[str]:
+        if self.status != CropCycleStatus.active or self.crop_name is None:
+            return None
+        days_in = (date.today() - self.planted_at).days
+        sp = get_sub_phase(self.crop_name, days_in, self.planted_at, self.forecasted_end_date)
+        return sp.label if sp else None

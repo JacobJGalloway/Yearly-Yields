@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     FIOT_DEFAULT_HUMIDITY_PCT: float = 65.0  # fallback target humidity when area.target_humidity_pct is null
 
     PURGE_INTERVAL_HOURS: int = 24  # how often the nightly sensor reading purge runs
+    PHASE_CHECK_INTERVAL_HOURS: int = 24  # how often to check crop cycles for harvest phase entry
 
     # Data retention
     # Sensor readings older than this many days are hard-deleted by the nightly purge job.
