@@ -33,7 +33,7 @@ export interface SensorReadingCreate {
 @Injectable({ providedIn: 'root' })
 export class ReadingService {
   private http = inject(HttpClient);
-  private base = '/api/v1/sensor-readings';
+  private base = '/api/v1/readings';
 
   list(filters: { growing_area_id?: string; assessment_status?: string; limit?: number } = {}): Observable<SensorReading[]> {
     let params = new HttpParams();

@@ -454,7 +454,7 @@ export class OverviewComponent implements OnInit {
     return {
       title: {
         text: 'Weekly Sensor Averages',
-        subtext: '°F  /  %',
+        subtext: 'All stations averaged  ·  °F  /  %',
         left: 16,
         top: 8,
         textStyle: { fontSize: 14 },

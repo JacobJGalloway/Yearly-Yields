@@ -17,7 +17,7 @@ class AlertRead(BaseModel):
     id: uuid.UUID
     growing_area_id: uuid.UUID
     crop_cycle_id: Optional[uuid.UUID]
-    triggering_reading_id: uuid.UUID
+    triggering_reading_id: Optional[uuid.UUID]
     alert_type: AlertType
     status: AlertStatus
     consecutive_normal_count: int

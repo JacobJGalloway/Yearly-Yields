@@ -66,6 +66,23 @@ docker/     PostgreSQL + pgvector container config
 API: http://localhost:8000  
 Swagger UI: http://localhost:8000/docs
 
+## Running locally
+
+```bash
+# 1. Start PostgreSQL (required first)
+cd backend
+docker compose up -d
+
+# 2. Start the backend
+python -m uvicorn app.main:app --reload
+# → http://127.0.0.1:8000  |  Swagger: http://127.0.0.1:8000/docs
+
+# 3. Start the frontend (new terminal)
+cd frontend/yearly-yields-ui
+npm start
+# → http://localhost:4200
+```
+
 ## Running tests
 
 ```bash
@@ -101,6 +118,19 @@ Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted
 | Morristown GH2 — Bay B | Tennessee Britches Tomato | 2026-03-01 | Growing (day 18 of 80) |
 | Morristown GH2 — Bay C | Arugula Lettuce | 2026-04-01 | Growing (day 3 of 11) |
 
+## Account recovery
+
+There is no self-service password reset yet (planned for v1.2). If you are locked out, reset directly via the database:
+
+```bash
+# 1. Generate a bcrypt hash for your new password (run from backend/)
+python -c "from passlib.context import CryptContext; print(CryptContext(schemes=['bcrypt']).hash('your-new-password'))"
+
+# 2. Apply it to the account
+docker exec yearly_yields_db psql -U user -d yearly_yields -c \
+  "UPDATE users SET hashed_password = '<paste hash here>' WHERE email = 'you@example.com';"
+```
+
 ## Data Retention
 
 Sensor data is managed by two background jobs that start automatically with the server — no manual trigger required.
@@ -126,8 +156,12 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 - **GrowingArea unique name constraint** — Enforce unique names per owner at the database and API layer (unique index + 422 on conflict). Currently handled by name-match deduplication in `seed_demo_farms.py`.
 - **Coordinate input format** — Add Field currently requires decimal lat/long. Add support for degrees, minutes, and seconds (DMS) input with auto-conversion, as most farm GPS equipment outputs DMS format.
 - **Backfill anomaly averaging** — When the NWS polling service catches up after downtime, average the backfilled observations over the gap window and run anomaly detection on the result. A confirmed anomaly in the average is a stronger signal than any single reading.
+- **Yield plan manual entry (workaround)** — The "Generate Plan" UI button is hidden pending the v1.2 wizard. Until then, yield plans are entered directly via the API or database. The table view remains visible so existing plans are accessible.
+- **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
+- **Forgot password / password reset flow** — New users are currently assigned an initial password at creation. Add a forgot password flow (email link → reset form) on the login page. The same flow covers forced resets for expired or temporary passwords.
 
 ### v1.2
+- **AI-guided yield plan wizard** — Replace the static "Generate Yield Plan" form with a conversational wizard. The agent asks the farmer a structured set of questions (growing area, current phase, historical yield, market demand) and synthesizes the answers into a recommended target yield with reasoning. The final decision stays with the owner or farmer. Requires growing area selection support, which is absent from the current form.
 - **pgvector embedding purge** — Remove voyage-3 embeddings from `pgvector` for sensor readings that have been deleted or rolled into weekly summaries, preventing the vector store from growing unboundedly.
 - **User-to-growing-area assignment model** — Allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
 - **Configurable crop phase day admin UI** — Seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.

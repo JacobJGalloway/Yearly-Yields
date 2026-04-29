@@ -21,7 +21,7 @@ async def list_alerts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[AlertRead]:
-    query = select(Alert).join(Alert.growing_area).where(
+    query = select(Alert).where(
         Alert.growing_area.has(owner_id=current_user.id)
     )
     if active_only:
