@@ -50,6 +50,16 @@ def _list_cycles(token: str, growing_area_id: str) -> list[dict]:
 def _create_area(token: str, payload: dict, existing: list[dict]) -> dict:
     match = next((a for a in existing if a["name"] == payload["name"]), None)
     if match:
+        patch_fields = {
+            k: v for k, v in payload.items()
+            if k in ("nws_station_id", "temp_offset_f", "humidity_offset_pct", "target_temp_f", "target_humidity_pct")
+            and match.get(k) != v
+        }
+        if patch_fields:
+            resp = httpx.patch(f"{BASE_URL}/fields/{match['id']}", json=patch_fields, headers=_headers(token))
+            resp.raise_for_status()
+            print(f"  Updated: {match['name']} ({match['id']}) — {list(patch_fields.keys())}")
+            return resp.json()
         print(f"  Skipped (already exists): {match['name']} ({match['id']})")
         return match
     resp = httpx.post(f"{BASE_URL}/fields/", json=payload, headers=_headers(token))
@@ -207,23 +217,38 @@ def main() -> None:
         _create_cycle(token, payload)
 
     # ── Jacksonville IL open fields (KMTO) ───────────────────────────────────
-    # Patch any open_field areas without an NWS station.
-    # Jacksonville IL is the only open field site, so KMTO is unambiguous.
-    print("\nPatching Jacksonville IL open fields with KMTO station:")
-    unassigned_fields = [
-        a for a in existing_areas
-        if a["area_type"] == "open_field" and not a.get("nws_station_id")
+    print("\nCreating Jacksonville IL open fields (KMTO):")
+    jacksonville_fields = [
+        {
+            "name": "Jax IL — Corn Field",
+            "area_type": "open_field",
+            "latitude": 39.7350,
+            "longitude": -90.2290,
+            "area_acres": 120.0,
+            "nws_station_id": "KMTO",
+        },
+        {
+            "name": "Jax IL — Soybean Field",
+            "area_type": "open_field",
+            "latitude": 39.7300,
+            "longitude": -90.2350,
+            "area_acres": 95.0,
+            "nws_station_id": "KMTO",
+        },
     ]
-    if not unassigned_fields:
-        print("  All open fields already have a station assigned — nothing to patch.")
-    for area in unassigned_fields:
-        resp = httpx.patch(
-            f"{BASE_URL}/fields/{area['id']}",
-            json={"nws_station_id": "KMTO"},
-            headers=_headers(token),
-        )
-        resp.raise_for_status()
-        print(f"  Patched: {area['name']} ({area['id']}) → KMTO")
+    jax_areas = [_create_area(token, f, existing_areas) for f in jacksonville_fields]
+
+    print("  Adding 2026 corn and soybean cycles for Jacksonville:")
+    jax_cycle_specs = [
+        (jax_areas[0], corn_id,    "2026-05-01", "2026-10-15"),
+        (jax_areas[1], soybean_id, "2026-05-10", "2026-10-22"),
+    ]
+    for area, crop_id, planted, end in jax_cycle_specs:
+        _create_cycle(token, {
+            "growing_area_id": area["id"], "crop_id": crop_id,
+            "season_year": 2026, "cycle_number": 1, "yield_unit": "bushels",
+            "planted_at": planted, "forecasted_end_date": end,
+        })
 
     print("\nAll done. Growing areas and crop cycles are ready.")
     print("NWS polling starts automatically with the dev server.")

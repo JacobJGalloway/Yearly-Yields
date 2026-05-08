@@ -515,8 +515,8 @@ export class OverviewComponent implements OnInit {
       type: 'bar' as const,
       color: CHART_COLORS[i % CHART_COLORS.length],
       data: years.map(yr => {
-        const match = harvested.find(c => c.season_year === yr && c.crop_id === cropId);
-        return match?.actual_yield ?? 0;
+        const matches = harvested.filter(c => c.season_year === yr && c.crop_id === cropId);
+        return matches.reduce((sum, c) => sum + (c.actual_yield ?? 0), 0);
       }),
     }));
 

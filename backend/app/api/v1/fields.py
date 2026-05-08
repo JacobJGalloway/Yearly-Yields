@@ -40,6 +40,11 @@ async def create_growing_area(
         longitude=payload.longitude,
         area_acres=payload.area_acres,
         area_sqft=payload.area_sqft,
+        nws_station_id=payload.nws_station_id,
+        temp_offset_f=payload.temp_offset_f,
+        humidity_offset_pct=payload.humidity_offset_pct,
+        target_temp_f=payload.target_temp_f,
+        target_humidity_pct=payload.target_humidity_pct,
     )
     db.add(area)
     await db.commit()
@@ -102,6 +107,16 @@ async def update_growing_area(
         area.area_acres = payload.area_acres
     if payload.area_sqft is not None:
         area.area_sqft = payload.area_sqft
+    if payload.nws_station_id is not None:
+        area.nws_station_id = payload.nws_station_id
+    if payload.temp_offset_f is not None:
+        area.temp_offset_f = payload.temp_offset_f
+    if payload.humidity_offset_pct is not None:
+        area.humidity_offset_pct = payload.humidity_offset_pct
+    if payload.target_temp_f is not None:
+        area.target_temp_f = payload.target_temp_f
+    if payload.target_humidity_pct is not None:
+        area.target_humidity_pct = payload.target_humidity_pct
 
     await db.commit()
     await db.refresh(area)

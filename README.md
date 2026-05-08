@@ -68,16 +68,25 @@ Swagger UI: http://localhost:8000/docs
 
 ## Running locally
 
+**Prerequisites:** Docker Desktop must be running before step 1.
+
 ```bash
+# 0. Copy and configure environment (first time only)
+cp backend/.env.example backend/.env
+# → Fill in DATABASE_URL, SECRET_KEY, ANTHROPIC_API_KEY, and SENDGRID_API_KEY
+
 # 1. Start PostgreSQL (required first)
 cd backend
 docker compose up -d
 
-# 2. Start the backend
+# 2. Apply database migrations (first time, or after pulling new migrations)
+python -m alembic upgrade head
+
+# 3. Start the backend
 python -m uvicorn app.main:app --reload
 # → http://127.0.0.1:8000  |  Swagger: http://127.0.0.1:8000/docs
 
-# 3. Start the frontend (new terminal)
+# 4. Start the frontend (new terminal)
 cd frontend/yearly-yields-ui
 npm start
 # → http://localhost:4200
