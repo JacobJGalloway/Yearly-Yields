@@ -127,6 +127,15 @@ Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted
 | Morristown GH2 — Bay B | Tennessee Britches Tomato | 2026-03-01 | Growing (day 18 of 80) |
 | Morristown GH2 — Bay C | Arugula Lettuce | 2026-04-01 | Growing (day 3 of 11) |
 
+When you go to setup a fresh or wiped database and need the seed data loaded back in, 
+run the following scripts in this order (all scripts are in backend folder) - 
+1) seed_demo_farms.py
+2) seed_historical_harvests.py
+3) seed_morristown_harvests.py
+4) seed_sensor_backfill.py
+5) patch_target_yields.py
+6) backfill_cdo.py
+
 ## Account recovery
 
 There is no self-service password reset yet (planned for v1.2). If you are locked out, reset directly via the database:
