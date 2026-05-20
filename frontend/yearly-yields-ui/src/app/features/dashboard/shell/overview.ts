@@ -104,6 +104,11 @@ export class OverviewComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Pre-initialize from service state so nav-back restores in-flight spinner/response.
+    this.chatOpen = this.dashboardService.chatOpen$.value;
+    this.chatLoading = this.dashboardService.chatLoading$.value;
+    this.chatResponse = this.dashboardService.chatResponse$.value;
+
     this.dashboardService.chatOpen$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatOpen = v; this.cdr.detectChanges(); });
     this.dashboardService.chatLoading$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatLoading = v; this.cdr.detectChanges(); });
     this.dashboardService.chatResponse$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatResponse = v; this.cdr.detectChanges(); });

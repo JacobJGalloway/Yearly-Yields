@@ -75,6 +75,7 @@ export class DashboardService {
   chatHistory: ChatMessage[] = [];
 
   sendChat(message: string): void {
+    if (this.chatLoading$.value) return;
     const historyBeforeSend = [...this.chatHistory];
     this.chatHistory = [...this.chatHistory, { role: 'user', content: message }];
     this.chatOpen$.next(true);
