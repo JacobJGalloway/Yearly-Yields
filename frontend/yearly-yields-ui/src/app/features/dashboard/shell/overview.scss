@@ -25,6 +25,7 @@
 }
 
 .chat-panel {
+  flex-shrink: 0;
   background: var(--mat-sys-surface-container);
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 12px;

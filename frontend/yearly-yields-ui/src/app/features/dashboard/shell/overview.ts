@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,11 +13,11 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
-import { forkJoin, switchMap } from 'rxjs';
+import { forkJoin, skip, switchMap } from 'rxjs';
 
 import { Store } from '@ngrx/store';
 import { Crop, CropCycle, CropService } from '../../../core/services/crop.service';
-import { DashboardService, ChatMessage, ChatResponse, WeeklySummary } from '../../../core/services/dashboard.service';
+import { DashboardService, ChatResponse, WeeklySummary } from '../../../core/services/dashboard.service';
 import { FieldService, GrowingArea } from '../../../core/services/field.service';
 import { SensorReading } from '../../../core/services/reading.service';
 import { selectUserRole } from '../../../store/auth/auth.selectors';
@@ -57,20 +57,21 @@ const CHART_COLORS = [
   styleUrl: './overview.scss',
 })
 export class OverviewComponent implements OnInit {
-  @ViewChild('chatLog') private chatLogRef!: ElementRef<HTMLDivElement>;
-
   private cropService = inject(CropService);
   private fieldService = inject(FieldService);
-  private dashboardService = inject(DashboardService);
+  protected dashboardService = inject(DashboardService);
   private store = inject(Store);
   private destroyRef = inject(DestroyRef);
+  private cdr = inject(ChangeDetectorRef);
 
   chatInput = '';
   chatOpen = false;
   chatLoading = false;
-  chatHistory: ChatMessage[] = [];
   chatResponse: ChatResponse | null = null;
-  chatResponseOptions: EChartsOption | null = null;
+
+  get chatResponseOptions(): EChartsOption | null {
+    return this.chatResponse?.type === 'chart' ? this._buildChatChartOptions(this.chatResponse) : null;
+  }
 
   sensorLoading = true;
   cycleLoading = true;
@@ -103,6 +104,10 @@ export class OverviewComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.dashboardService.chatOpen$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatOpen = v; this.cdr.detectChanges(); });
+    this.dashboardService.chatLoading$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatLoading = v; this.cdr.detectChanges(); });
+    this.dashboardService.chatResponse$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatResponse = v; this.cdr.detectChanges(); });
+
     this.store.select(selectUserRole).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(role => {
       this.sensorGroupBy = role === 'farmer' ? 'area' : 'station';
     });
@@ -167,49 +172,12 @@ export class OverviewComponent implements OnInit {
   sendMessage(override?: string): void {
     const msg = (override ?? this.chatInput).trim();
     if (!msg || this.chatLoading) return;
-
     this.chatInput = '';
-    this.chatOpen = true;
-    this.chatResponse = null;
-    this.chatResponseOptions = null;
-    const historyBeforeSend = [...this.chatHistory];
-    this.chatHistory = [...this.chatHistory, { role: 'user', content: msg }];
-    this.chatLoading = true;
-
-    this.dashboardService.sendChatMessage(msg, historyBeforeSend).subscribe({
-      next: res => {
-        this.chatResponse = res;
-        this.chatResponseOptions = res.type === 'chart' ? this._buildChatChartOptions(res) : null;
-        const summary = this._responseToHistoryText(res);
-        this.chatHistory = [...this.chatHistory, { role: 'assistant', content: summary }];
-        this.chatLoading = false;
-      },
-      error: () => {
-        this.chatResponse = { type: 'text', content: 'Something went wrong. Please try again.' };
-        this.chatHistory = [
-          ...this.chatHistory,
-          { role: 'assistant', content: 'Error retrieving response.' },
-        ];
-        this.chatLoading = false;
-      },
-    });
+    this.dashboardService.sendChat(msg);
   }
 
   closeChat(): void {
-    this.chatOpen = false;
-    this.chatResponse = null;
-    this.chatResponseOptions = null;
-    this.chatHistory = [];
-  }
-
-  private _responseToHistoryText(res: ChatResponse): string {
-    switch (res.type) {
-      case 'chart': return `[Chart: ${res.title ?? 'data visualization'}]`;
-      case 'table': return `[Table: ${res.title ?? 'data table'}]`;
-      case 'link':  return `[Link provided: ${res.content ?? res.url}]`;
-      case 'clarifying_question': return `[Asked for clarification: ${res.content}]`;
-      default: return res.content ?? '';
-    }
+    this.dashboardService.closeChat();
   }
 
   private _buildChatChartOptions(res: ChatResponse): EChartsOption {
@@ -239,11 +207,6 @@ export class OverviewComponent implements OnInit {
     };
   }
 
-  private scrollChatToBottom(): void {
-    const el = this.chatLogRef?.nativeElement;
-    if (el) el.scrollTop = el.scrollHeight;
-  }
-
   private buildSensorTrendOptions(): EChartsOption {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
@@ -263,28 +226,19 @@ export class OverviewComponent implements OnInit {
       }
 
       for (const [station, stationReadings] of byStation) {
-        const byDate = new Map<string, number[]>();
-        for (const r of stationReadings) {
-          if (r.temperature == null) continue;
-          const dk = r.read_at.slice(0, 10);
-          if (!byDate.has(dk)) byDate.set(dk, []);
-          byDate.get(dk)!.push(r.temperature);
-        }
-        const data = [...byDate.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([dk, temps]) => [
-            `${dk}T12:00:00.000Z`,
-            +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(2),
-          ]);
-
-        if (!data.length) continue;
+        const sorted = [...stationReadings]
+          .filter(r => r.temperature != null)
+          .sort((a, b) => new Date(a.read_at).getTime() - new Date(b.read_at).getTime());
+        const step = Math.max(1, Math.floor(sorted.length / 200));
+        const sampled = sorted.filter((_, i) => i % step === 0);
+        if (!sampled.length) continue;
         series.push({
           name: station,
           type: 'line',
           smooth: true,
           symbol: 'none',
           color: CHART_COLORS[colorIdx++ % CHART_COLORS.length],
-          data,
+          data: sampled.map(r => [r.read_at, r.temperature]),
         });
       }
     } else {

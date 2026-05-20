@@ -323,7 +323,7 @@ The backend test suite runs via pytest with coverage reporting. All service and 
 | Metric | Value |
 |--------|-------|
 | Total tests | 282 |
-| Coverage | 87.76% |
+| Coverage | 83.26% |
 | Coverage threshold | 50% (enforced via `--cov-fail-under=50`) |
 
 ```bash
@@ -337,6 +337,8 @@ python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=
 |-----|--------|
 | `main.py` lifespan code | Requires full infrastructure startup to exercise meaningfully — not a unit test candidate |
 | `agent/chat.py` streaming loop | Requires live Anthropic SDK connection and streaming infrastructure — integration-level coverage only |
+| `mcp/server.py` | Requires subprocess start + live PostgreSQL — infrastructure-dependent, same category as lifespan |
+| `mcp/client.py` | Manages subprocess lifecycle — not unit-testable without a running MCP server |
 
 Both gaps are documented and accepted. The 87.76% figure accurately represents the testable surface area of the application — the remaining 12.24% is infrastructure-dependent, not untested business logic.
 

@@ -24,9 +24,8 @@
     </button>
   </div>
 
-  <!-- Chat response panel -->
-  @if (chatOpen) {
-    <div class="chat-panel">
+  <!-- Chat response panel: display toggled via CSS so no embedded-view creation needed -->
+  <div class="chat-panel" [style.display]="chatOpen ? 'block' : 'none'">
       <div class="chat-panel-header">
         <span class="chat-panel-title">
           @if (chatLoading) { Thinking... }
@@ -92,7 +91,7 @@
             <p>{{ chatResponse.content }}</p>
             @if (chatResponse.options?.length) {
               <div class="chat-clarify-options">
-                @for (opt of chatResponse.options; track $index) {
+                @for (opt of chatResponse.options!; track $index) {
                   <button mat-stroked-button (click)="sendMessage(opt)">{{ opt }}</button>
                 }
               </div>
@@ -101,8 +100,7 @@
         }
 
       }
-    </div>
-  }
+  </div>
 
   <!-- Chart grid: sensor full-width / yield+weekly half / yoy full-width -->
   <div class="chart-grid">

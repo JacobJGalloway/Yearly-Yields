@@ -260,7 +260,9 @@ async def _purge_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.mcp.client import start_mcp_server, stop_mcp_server
     from app.services.catchup_service import run_system_backfill
+    await start_mcp_server()
     backfill_task = asyncio.create_task(run_system_backfill())
     poll_task = asyncio.create_task(_poll_loop(settings.NWS_POLL_INTERVAL_HOURS))
     purge_task = asyncio.create_task(_purge_loop())
@@ -272,6 +274,7 @@ async def lifespan(app: FastAPI):
     purge_task.cancel()
     fiot_task.cancel()
     phase_task.cancel()
+    await stop_mcp_server()
     await engine.dispose()
 
 

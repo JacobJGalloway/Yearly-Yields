@@ -141,7 +141,6 @@ async def dispatch_tool(
     handlers = {
         "get_historical_context": handle_get_historical_context,
         "get_weather_context": handle_get_weather_context,
-        "get_active_alert": handle_get_active_alert,
         "create_alert": handle_create_alert,
         "update_alert": handle_update_alert,
         "send_alert_email": handle_send_alert_email,

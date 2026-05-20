@@ -16,6 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.loop import run_anomaly_check
+from app.agent.tools import ANOMALY_WRITE_TOOLS
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
 from app.models.field import GrowingArea, GrowingAreaType
 from app.models.sensor_reading import AssessmentStatus, ReadingSource, SensorReading
@@ -110,7 +111,7 @@ def _make_log_assessment_response(reading_id) -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_loop_handles_crop_context(db: AsyncSession, owner_user: User):
-    """run_anomaly_check extracts crop/phase context when crop_cycle_id is set."""
+    """run_anomaly_check completes normally when a crop_cycle_id is set."""
     area = GrowingArea(
         owner_id=owner_user.id,
         name="Loop Test Field",
@@ -153,7 +154,8 @@ async def test_loop_handles_crop_context(db: AsyncSession, owner_user: User):
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=mock_resp)
 
-    with patch("app.agent.loop._client", mock_client):
+    with patch("app.agent.loop._get_all_tools", new=AsyncMock(return_value=ANOMALY_WRITE_TOOLS)), \
+         patch("app.agent.loop._client", mock_client):
         await run_anomaly_check(reading.id, db)
 
     await db.refresh(reading)
@@ -178,7 +180,8 @@ async def test_loop_handles_exception(db: AsyncSession, owner_user: User, growin
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(side_effect=Exception("API unavailable"))
 
-    with patch("app.agent.loop._client", mock_client):
+    with patch("app.agent.loop._get_all_tools", new=AsyncMock(return_value=ANOMALY_WRITE_TOOLS)), \
+         patch("app.agent.loop._client", mock_client):
         await run_anomaly_check(reading.id, db)
 
     await db.refresh(reading)
