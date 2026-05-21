@@ -267,6 +267,26 @@ async def _purge_old_weekly_summaries() -> None:
     )
 
 
+async def _purge_old_historical_summaries() -> None:
+    from app.models.historical_summary import HistoricalSummary
+
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=settings.DATA_RETENTION_DAYS)
+    cutoff_year, cutoff_week = cutoff.isocalendar().year, cutoff.isocalendar().week
+    cutoff_key = cutoff_year * 100 + cutoff_week
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            delete(HistoricalSummary).where(
+                (HistoricalSummary.year * 100 + HistoricalSummary.week_number) < cutoff_key
+            )
+        )
+        await db.commit()
+    logger.info(
+        "Purged %d historical summaries before ISO week %d/%02d",
+        result.rowcount, cutoff_year, cutoff_week,
+    )
+
+
 async def _catchup_summarization() -> None:
     """Run summarization at startup if readings older than the retention window exist."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DAILY_RETENTION_DAYS)
@@ -301,6 +321,10 @@ async def _purge_loop() -> None:
                 await _purge_old_weekly_summaries()
             except Exception:
                 logger.exception("Year-end weekly summary purge failed")
+            try:
+                await _purge_old_historical_summaries()
+            except Exception:
+                logger.exception("Year-end historical summary purge failed")
         await asyncio.sleep(settings.PURGE_INTERVAL_HOURS * 3600)
 
 
