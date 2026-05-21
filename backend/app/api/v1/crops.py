@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.dependencies import get_current_user, require_role
-from app.models.alert import Alert, AlertStatus, AlertType
 from app.models.crop import Crop, CropCycle, CropCycleStatus
 from app.models.field import GrowingArea, GrowingAreaType
 from app.models.user import User, UserRole
@@ -149,7 +147,6 @@ async def update_crop_cycle(
 
     transitioning_to_harvested = False
     transitioning_to_transplanted = False
-    transitioning_to_terminal = False
 
     if payload.status is not None and payload.status != cycle.status:
         try:
@@ -179,7 +176,6 @@ async def update_crop_cycle(
 
         if payload.status == CropCycleStatus.harvested:
             transitioning_to_harvested = True
-            transitioning_to_terminal = True
 
         if payload.status == CropCycleStatus.transplanted:
             crop_result = await db.execute(select(Crop).where(Crop.id == cycle.crop_id))
@@ -190,10 +186,6 @@ async def update_crop_cycle(
                     detail="Transplanted status is only valid for greenhouse crops.",
                 )
             transitioning_to_transplanted = True
-            transitioning_to_terminal = True
-
-        if payload.status == CropCycleStatus.abandoned:
-            transitioning_to_terminal = True
 
         cycle.status = payload.status
 
@@ -210,20 +202,6 @@ async def update_crop_cycle(
 
     await db.commit()
     await db.refresh(cycle)
-
-    if transitioning_to_terminal:
-        alert_result = await db.execute(
-            select(Alert).where(
-                Alert.crop_cycle_id == cycle_id,
-                Alert.alert_type == AlertType.harvest_ready,
-                Alert.status == AlertStatus.active,
-            )
-        )
-        harvest_alert = alert_result.scalar_one_or_none()
-        if harvest_alert:
-            harvest_alert.status = AlertStatus.resolved
-            harvest_alert.resolved_at = datetime.now(timezone.utc)
-            await db.commit()
 
     if transitioning_to_harvested:
         await create_draft_invoice(cycle.id, db)

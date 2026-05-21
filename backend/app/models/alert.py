@@ -19,7 +19,6 @@ class AlertType(str, Enum):
     humidity_high = "humidity_high"
     humidity_low = "humidity_low"
     combined = "combined"
-    harvest_ready = "harvest_ready"
 
 
 class AlertStatus(str, Enum):
