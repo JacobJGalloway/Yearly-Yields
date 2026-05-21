@@ -59,7 +59,11 @@ export class DashboardService {
   }
 
   getRecentReadings(limit = environment.dashboardReadingsLimit): Observable<SensorReading[]> {
-    const params = new HttpParams().set('limit', limit);
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const params = new HttpParams()
+      .set('limit', limit)
+      .set('since', since.toISOString());
     return this.http.get<SensorReading[]>(`${this.readingsBase}/`, { params });
   }
 

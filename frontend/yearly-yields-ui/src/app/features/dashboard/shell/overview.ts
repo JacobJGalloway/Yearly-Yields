@@ -243,13 +243,20 @@ export class OverviewComponent implements OnInit {
         if (!byStation.has(station)) byStation.set(station, []);
         byStation.get(station)!.push(r);
       }
-
       for (const [station, stationReadings] of byStation) {
-        const sorted = [...stationReadings]
-          .filter(r => r.temperature != null)
-          .sort((a, b) => new Date(a.read_at).getTime() - new Date(b.read_at).getTime());
-        const step = Math.max(1, Math.floor(sorted.length / 200));
-        const sampled = sorted.filter((_, i) => i % step === 0);
+        // Average readings at the same timestamp across all areas in the station.
+        // Multiple areas share the same poll timestamps — concatenating them raw creates noise.
+        const byTs = new Map<string, number[]>();
+        for (const r of stationReadings) {
+          if (r.temperature == null) continue;
+          if (!byTs.has(r.read_at)) byTs.set(r.read_at, []);
+          byTs.get(r.read_at)!.push(r.temperature);
+        }
+        const averaged = [...byTs.entries()]
+          .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+          .map(([ts, temps]) => [ts, +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)]);
+        const step = Math.max(1, Math.floor(averaged.length / 200));
+        const sampled = averaged.filter((_, i) => i % step === 0);
         if (!sampled.length) continue;
         series.push({
           name: station,
@@ -257,7 +264,7 @@ export class OverviewComponent implements OnInit {
           smooth: true,
           symbol: 'none',
           color: CHART_COLORS[colorIdx++ % CHART_COLORS.length],
-          data: sampled.map(r => [r.read_at, r.temperature]),
+          data: sampled,
         });
       }
     } else {
@@ -305,7 +312,7 @@ export class OverviewComponent implements OnInit {
       },
       legend: { bottom: 0, type: 'scroll' },
       grid: { top: 48, bottom: 48, left: 60, right: 24 },
-      xAxis: { type: 'time', axisLabel: { formatter: (v: number) => new Date(v).toLocaleDateString() } },
+      xAxis: { type: 'time' },
       yAxis: { type: 'value', name: '°F', nameLocation: 'end', axisLabel: { formatter: '{value}°' } },
       series,
     };
