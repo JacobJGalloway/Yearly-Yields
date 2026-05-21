@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     PURGE_INTERVAL_HOURS: int = 24  # how often the nightly sensor reading purge runs
     GAP_THRESHOLD_DAYS: int = 7    # NWS data gap duration that triggers an approval prompt
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60  # how long a reset link remains valid
     PHASE_CHECK_INTERVAL_HOURS: int = 24  # how often to check crop cycles for harvest phase entry
 
     # Data retention

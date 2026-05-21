@@ -10,6 +10,8 @@ Two token types:
   - refresh_token: long-lived (REFRESH_TOKEN_EXPIRE_DAYS), used only to get a new access token
 """
 
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -74,6 +76,17 @@ def decode_token(token: str, expected_type: str) -> Optional[str]:
         return payload.get("sub")
     except JWTError:
         return None
+
+
+def generate_reset_token() -> tuple[str, str]:
+    """Return (raw_token, sha256_hex_hash). Email the raw token; store only the hash."""
+    raw = secrets.token_urlsafe(32)
+    hashed = hashlib.sha256(raw.encode()).hexdigest()
+    return raw, hashed
+
+
+def hash_reset_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def decode_access_payload(token: str) -> Optional[dict]:

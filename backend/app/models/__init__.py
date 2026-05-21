@@ -14,3 +14,4 @@ from app.models.alert import Alert, AlertType, AlertStatus  # noqa: F401
 from app.models.yield_plan import YieldPlan, ConfidenceLevel  # noqa: F401
 from app.models.invoice import CropRate, Invoice, InvoiceStatus  # noqa: F401
 from app.models.weekly_sensor_summary import WeeklySensorSummary  # noqa: F401
+from app.models.password_reset_token import PasswordResetToken  # noqa: F401

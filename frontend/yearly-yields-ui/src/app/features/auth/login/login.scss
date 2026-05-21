@@ -61,3 +61,34 @@
   margin-bottom: 8px;
 }
 
+.reset-success {
+  color: var(--mat-sys-primary);
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.reset-hint {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.875rem;
+  margin: 0 0 12px;
+}
+
+.reset-sent {
+  color: var(--mat-sys-primary);
+  font-size: 0.875rem;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+
+.forgot-footer {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 0.875rem;
+
+  a { color: var(--mat-sys-primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+}
+
+.back-btn { margin-top: 8px; }
+
