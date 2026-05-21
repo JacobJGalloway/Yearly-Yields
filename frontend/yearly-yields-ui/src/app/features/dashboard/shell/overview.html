@@ -24,6 +24,15 @@
     </button>
   </div>
 
+  <!-- NWS data gap banner -->
+  @if (pendingGapCount > 0) {
+    <div class="gap-banner">
+      <mat-icon class="gap-icon">warning_amber</mat-icon>
+      <span>{{ pendingGapCount }} field{{ pendingGapCount > 1 ? 's are' : ' is' }} missing NWS data for 7+ days.</span>
+      <button mat-stroked-button (click)="openGapReview()">Review</button>
+    </div>
+  }
+
   <!-- Chat response panel: display toggled via CSS so no embedded-view creation needed -->
   <div class="chat-panel" [style.display]="chatOpen ? 'block' : 'none'">
       <div class="chat-panel-header">

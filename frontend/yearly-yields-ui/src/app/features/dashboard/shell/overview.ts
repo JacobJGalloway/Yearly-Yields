@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -17,11 +18,13 @@ import { forkJoin, skip, switchMap } from 'rxjs';
 
 import { Store } from '@ngrx/store';
 import { Crop, CropCycle, CropService } from '../../../core/services/crop.service';
+import { DataGapService } from '../../../core/services/data-gap.service';
 import { DashboardService, ChatResponse, WeeklySummary } from '../../../core/services/dashboard.service';
 import { FieldService, GrowingArea } from '../../../core/services/field.service';
 import { SensorReading } from '../../../core/services/reading.service';
 import { selectUserRole } from '../../../store/auth/auth.selectors';
 import { BRAND } from '../../../core/brand';
+import { GapReviewDialogComponent } from './gap-review-dialog';
 
 const CHART_COLORS = [
   '#4e79a7', // steel blue
@@ -45,6 +48,7 @@ const CHART_COLORS = [
     MatButtonToggleModule,
     MatCardModule,
     MatChipsModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
@@ -60,9 +64,13 @@ export class OverviewComponent implements OnInit {
   private cropService = inject(CropService);
   private fieldService = inject(FieldService);
   protected dashboardService = inject(DashboardService);
+  private gapService = inject(DataGapService);
+  private dialog = inject(MatDialog);
   private store = inject(Store);
   private destroyRef = inject(DestroyRef);
   private cdr = inject(ChangeDetectorRef);
+
+  pendingGapCount = 0;
 
   chatInput = '';
   chatOpen = false;
@@ -163,6 +171,14 @@ export class OverviewComponent implements OnInit {
         this.weeklyLoading = false;
         this.yoyLoading = false;
       },
+    });
+
+    this.gapService.list().subscribe(gaps => { this.pendingGapCount = gaps.length; });
+  }
+
+  openGapReview(): void {
+    this.dialog.open(GapReviewDialogComponent).afterClosed().subscribe(() => {
+      this.gapService.list().subscribe(gaps => { this.pendingGapCount = gaps.length; });
     });
   }
 

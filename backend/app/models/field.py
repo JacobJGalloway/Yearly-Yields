@@ -1,8 +1,9 @@
 import uuid
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, Enum as SAEnum, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, new_uuid
@@ -65,6 +66,9 @@ class GrowingArea(Base, TimestampMixin):
     target_temp_f: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     target_humidity_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    gap_acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     owner: Mapped["User"] = relationship(
