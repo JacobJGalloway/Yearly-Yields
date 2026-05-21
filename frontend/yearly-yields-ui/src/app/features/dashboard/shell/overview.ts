@@ -85,11 +85,14 @@ export class OverviewComponent implements OnInit {
 
   sensorGroupBy: 'area' | 'station' = 'station'; // overridden by role in ngOnInit
   selectedAreaIds: string[] = [];
+  weeklyGroupBy: 'area' | 'station' = 'station'; // overridden by role in ngOnInit
+  selectedWeeklyAreaIds: string[] = [];
   allAreas: GrowingArea[] = [];
 
   allCrops: Crop[] = [];
 
   private _readings: SensorReading[] = [];
+  private _weeklySummaries: WeeklySummary[] = [];
   private _currentSeasonCycles: CropCycle[] = [];
   private _areaMap = new Map<string, string>();
   private _areaStationMap = new Map<string, string>();
@@ -115,6 +118,7 @@ export class OverviewComponent implements OnInit {
 
     this.store.select(selectUserRole).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(role => {
       this.sensorGroupBy = role === 'farmer' ? 'area' : 'station';
+      this.weeklyGroupBy = role === 'farmer' ? 'area' : 'station';
     });
 
     forkJoin({
@@ -145,7 +149,8 @@ export class OverviewComponent implements OnInit {
         this.sensorTrendOptions = this.buildSensorTrendOptions();
         this.sensorLoading = false;
 
-        this.weeklySummaryOptions = this.buildWeeklySummaryOptions(summaries);
+        this._weeklySummaries = summaries;
+        this.weeklySummaryOptions = this.buildWeeklySummaryOptions();
         this.weeklyLoading = false;
 
         this.yoyYieldOptions = this.buildYoYYieldOptions(allCycles);
@@ -168,6 +173,15 @@ export class OverviewComponent implements OnInit {
 
   rebuildSensorChart(): void {
     this.sensorTrendOptions = this.buildSensorTrendOptions();
+  }
+
+  onWeeklyGroupByChange(): void {
+    this.selectedWeeklyAreaIds = [];
+    this.weeklySummaryOptions = this.buildWeeklySummaryOptions();
+  }
+
+  rebuildWeeklyChart(): void {
+    this.weeklySummaryOptions = this.buildWeeklySummaryOptions();
   }
 
   rebuildCycleChart(): void {
@@ -394,28 +408,71 @@ export class OverviewComponent implements OnInit {
     };
   }
 
-  private buildWeeklySummaryOptions(summaries: WeeklySummary[]): EChartsOption {
+  private buildWeeklySummaryOptions(): EChartsOption {
+    const summaries = this._weeklySummaries;
     if (!summaries.length) return this.emptyChart('Weekly Sensor Averages');
 
-    const byWeek = new Map<string, { temps: number[]; humidities: number[] }>();
+    const avg = (arr: number[]) =>
+      arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
+
+    // Sort weeks chronologically by year + iso_week
+    const weekMeta = new Map<string, { year: number; iso_week: number }>();
     for (const s of summaries) {
-      if (!byWeek.has(s.week_label)) byWeek.set(s.week_label, { temps: [], humidities: [] });
-      const bucket = byWeek.get(s.week_label)!;
-      if (s.avg_temp_f != null) bucket.temps.push(s.avg_temp_f);
-      if (s.avg_humidity_pct != null) bucket.humidities.push(s.avg_humidity_pct);
+      if (!weekMeta.has(s.week_label)) weekMeta.set(s.week_label, { year: s.year, iso_week: s.iso_week });
+    }
+    const allWeeks = [...weekMeta.keys()].sort((a, b) => {
+      const ma = weekMeta.get(a)!;
+      const mb = weekMeta.get(b)!;
+      return ma.year !== mb.year ? ma.year - mb.year : ma.iso_week - mb.iso_week;
+    });
+
+    const isAreaMode = this.weeklyGroupBy === 'area';
+    const subtext = isAreaMode ? 'By Area  ·  solid=°F  /  dashed=%' : 'By Station  ·  solid=°F  /  dashed=%';
+
+    // Build groups: station name or area id → summaries
+    const groups = new Map<string, WeeklySummary[]>();
+    const filterIds = isAreaMode && this.selectedWeeklyAreaIds.length
+      ? new Set(this.selectedWeeklyAreaIds) : null;
+
+    for (const s of summaries) {
+      if (filterIds && !filterIds.has(s.growing_area_id)) continue;
+      const key = isAreaMode
+        ? s.growing_area_id
+        : (this._areaStationMap.get(s.growing_area_id) ?? 'Unknown');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(s);
     }
 
-    const labels = [...byWeek.keys()];
-    const avg = (arr: number[]) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
-    const avgTemp = labels.map(l => avg(byWeek.get(l)!.temps));
-    const avgHumidity = labels.map(l => avg(byWeek.get(l)!.humidities));
+    const series: any[] = [];
+    let colorIdx = 0;
+    for (const [key, groupSummaries] of groups) {
+      const byWeek = new Map<string, { temps: number[]; humidities: number[] }>();
+      for (const s of groupSummaries) {
+        if (!byWeek.has(s.week_label)) byWeek.set(s.week_label, { temps: [], humidities: [] });
+        const bucket = byWeek.get(s.week_label)!;
+        if (s.avg_temp_f != null) bucket.temps.push(s.avg_temp_f);
+        if (s.avg_humidity_pct != null) bucket.humidities.push(s.avg_humidity_pct);
+      }
+      const label = isAreaMode ? (this._areaMap.get(key) ?? key.slice(0, 8)) : key;
+      const color = CHART_COLORS[colorIdx++ % CHART_COLORS.length];
+      series.push({
+        name: `${label} Temp`,
+        type: 'line', smooth: true, symbolSize: 4, color, yAxisIndex: 0,
+        data: allWeeks.map(w => avg(byWeek.get(w)?.temps ?? [])),
+      });
+      series.push({
+        name: `${label} Humidity`,
+        type: 'line', smooth: true, symbolSize: 4, color,
+        lineStyle: { type: 'dashed' }, yAxisIndex: 1,
+        data: allWeeks.map(w => avg(byWeek.get(w)?.humidities ?? [])),
+      });
+    }
 
     return {
       title: {
         text: 'Weekly Sensor Averages',
-        subtext: 'All stations averaged  ·  °F  /  %',
-        left: 16,
-        top: 8,
+        subtext,
+        left: 16, top: 8,
         textStyle: { fontSize: 14 },
         subtextStyle: { fontSize: 11, color: '#757575' },
       },
@@ -424,41 +481,23 @@ export class OverviewComponent implements OnInit {
         formatter: (params: any) => {
           const pts = Array.isArray(params) ? params : [params];
           const week = pts[0]?.axisValue ?? '';
-          const lines = pts.map((x: any) => {
-            const unit = x.seriesName === 'Avg Temp' ? '°F' : '%';
-            return `${x.marker}<b>${x.seriesName}:</b> ${x.value ?? '—'}${unit}`;
-          });
+          const lines = pts
+            .filter((x: any) => x.value != null)
+            .map((x: any) => {
+              const unit = x.seriesName.endsWith('Temp') ? '°F' : '%';
+              return `${x.marker}${x.seriesName}: ${x.value}${unit}`;
+            });
           return `<b>${week}</b><br>${lines.join('<br>')}`;
         },
       },
-      grid: { top: 64, bottom: 24, left: 60, right: 60 },
-      xAxis: { type: 'category', data: labels, axisLabel: { rotate: 45, fontSize: 10 } },
+      legend: { bottom: 0, type: 'scroll' },
+      grid: { top: 64, bottom: 48, left: 60, right: 60 },
+      xAxis: { type: 'category', data: allWeeks, axisLabel: { rotate: 45, fontSize: 10 } },
       yAxis: [
         { type: 'value', axisLabel: { formatter: '{value}°' } },
         { type: 'value', axisLabel: { formatter: '{value}%' } },
       ],
-      series: [
-        {
-          name: 'Avg Temp',
-          type: 'line',
-          areaStyle: { opacity: 0.2 },
-          smooth: true,
-          symbolSize: 6,
-          color: '#4e79a7',
-          yAxisIndex: 0,
-          data: avgTemp,
-        },
-        {
-          name: 'Avg Humidity',
-          type: 'line',
-          areaStyle: { opacity: 0.15 },
-          smooth: true,
-          symbolSize: 6,
-          color: BRAND.harvestGold,
-          yAxisIndex: 1,
-          data: avgHumidity,
-        },
-      ],
+      series,
     };
   }
 

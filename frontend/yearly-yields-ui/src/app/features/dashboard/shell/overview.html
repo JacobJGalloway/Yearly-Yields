@@ -163,6 +163,38 @@
         @if (weeklyLoading) {
           <div class="chart-spinner"><mat-spinner diameter="40" /></div>
         } @else {
+          <div class="sensor-controls">
+            <mat-button-toggle-group
+              [(ngModel)]="weeklyGroupBy"
+              (change)="onWeeklyGroupByChange()"
+              aria-label="Group weekly averages by"
+            >
+              <mat-button-toggle value="station">By Station</mat-button-toggle>
+              <mat-button-toggle value="area">By Area</mat-button-toggle>
+            </mat-button-toggle-group>
+
+            @if (weeklyGroupBy === 'area') {
+              <mat-form-field appearance="outline" class="area-filter-field">
+                <mat-label>Filter Areas</mat-label>
+                <mat-select multiple [(ngModel)]="selectedWeeklyAreaIds" (ngModelChange)="rebuildWeeklyChart()">
+                  @if (openFieldAreas.length) {
+                    <mat-optgroup label="Open Fields">
+                      @for (area of openFieldAreas; track area.id) {
+                        <mat-option [value]="area.id">{{ area.name }}</mat-option>
+                      }
+                    </mat-optgroup>
+                  }
+                  @if (greenhouseAreas.length) {
+                    <mat-optgroup label="Greenhouses">
+                      @for (area of greenhouseAreas; track area.id) {
+                        <mat-option [value]="area.id">{{ area.name }}</mat-option>
+                      }
+                    </mat-optgroup>
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+          </div>
           <div echarts [options]="weeklySummaryOptions" [autoResize]="true" class="chart chart--weekly"></div>
         }
       </mat-card-content>
