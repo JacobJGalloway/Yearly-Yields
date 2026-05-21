@@ -24,9 +24,9 @@ export interface YieldPlanDialogData {
     MatButtonModule,
   ],
   template: `
-    <h2 mat-dialog-title>Generate Yield Plan</h2>
+    <h2 mat-dialog-title>New Yield Plan</h2>
     <mat-dialog-content>
-      <p class="dialog-hint">The AI agent will analyze sensor history, weather context, and historical cycle data to generate a yield prediction.</p>
+      <p class="dialog-hint">Enter a target yield and select a crop cycle. The v1.2 guided wizard will replace this form.</p>
       <form [formGroup]="form" class="dialog-form">
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Crop Cycle</mat-label>
