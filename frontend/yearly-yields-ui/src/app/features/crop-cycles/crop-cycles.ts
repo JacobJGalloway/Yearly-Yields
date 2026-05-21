@@ -93,11 +93,11 @@ import { CropCycleDialogComponent } from './crop-cycle-dialog';
     .cycles-table { width: 100%; }
     .status-active { color: var(--mat-sys-primary); font-weight: 500; }
     .status-fallow { color: var(--mat-sys-on-surface-variant); }
-    .status-harvested { color: var(--mat-sys-tertiary); font-weight: 500; }
+    .status-harvested { color: var(--yy-harvest-gold); font-weight: 500; }
     .status-abandoned { color: var(--mat-sys-error); }
     .phase-seeding { color: var(--mat-sys-on-surface-variant); }
     .phase-growing { color: var(--mat-sys-primary); font-weight: 500; }
-    .phase-harvesting { color: var(--mat-sys-tertiary); font-weight: 500; }
+    .phase-harvesting { color: var(--yy-harvest-gold); font-weight: 500; }
     .phase-complete { color: var(--mat-sys-on-surface-variant); }
     .sub-phase-label { color: var(--mat-sys-on-surface-variant); font-size: 0.75em; font-weight: 400; }
   `],
