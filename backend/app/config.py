@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     DAILY_RETENTION_DAYS: int = 90
     # MM-DD dates on which the summarization job runs (quarterly by default).
     SUMMARIZATION_DATES: list[str] = ["03-31", "06-30", "09-30", "12-31"]
+    # Weekly sensor summaries older than this many years are purged each Dec 31.
+    # Default: 5 years. Summaries are low-volume aggregates; keep longer than raw readings.
+    WEEKLY_SUMMARY_RETENTION_YEARS: int = 5
 
     # Alerts
     # How many hours must pass before a repeat email is sent for an active alert.

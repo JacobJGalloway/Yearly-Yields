@@ -244,6 +244,47 @@ async def _phase_check_loop(interval_hours: int) -> None:
             logger.exception("Daily phase check failed")
 
 
+def _should_purge_weekly_summaries() -> bool:
+    return datetime.now(timezone.utc).strftime("%m-%d") == "12-31"
+
+
+async def _purge_old_weekly_summaries() -> None:
+    from app.models.weekly_sensor_summary import WeeklySensorSummary
+
+    cutoff = (
+        datetime.now(timezone.utc).date().replace(
+            year=datetime.now(timezone.utc).year - settings.WEEKLY_SUMMARY_RETENTION_YEARS
+        )
+    )
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            delete(WeeklySensorSummary).where(WeeklySensorSummary.week_start < cutoff)
+        )
+        await db.commit()
+    logger.info(
+        "Purged %d weekly sensor summaries with week_start before %s",
+        result.rowcount, cutoff,
+    )
+
+
+async def _catchup_summarization() -> None:
+    """Run summarization at startup if readings older than the retention window exist."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DAILY_RETENTION_DAYS)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(SensorReading.id).where(SensorReading.read_at < cutoff).limit(1)
+        )
+        overdue = result.scalar_one_or_none() is not None
+    if overdue:
+        logger.info("Missed summarization detected — running catch-up at startup")
+        try:
+            await _summarize_old_readings()
+        except Exception:
+            logger.exception("Startup summarization catch-up failed")
+    else:
+        logger.info("Summarization catch-up check: no overdue readings found")
+
+
 async def _purge_loop() -> None:
     while True:
         try:
@@ -255,6 +296,11 @@ async def _purge_loop() -> None:
                 await _summarize_old_readings()
             except Exception:
                 logger.exception("Quarterly sensor reading summarization failed")
+        if _should_purge_weekly_summaries():
+            try:
+                await _purge_old_weekly_summaries()
+            except Exception:
+                logger.exception("Year-end weekly summary purge failed")
         await asyncio.sleep(settings.PURGE_INTERVAL_HOURS * 3600)
 
 
@@ -263,6 +309,7 @@ async def lifespan(app: FastAPI):
     from app.mcp.client import start_mcp_server, stop_mcp_server
     from app.services.catchup_service import run_system_backfill
     await start_mcp_server()
+    await _catchup_summarization()
     backfill_task = asyncio.create_task(run_system_backfill())
     poll_task = asyncio.create_task(_poll_loop(settings.NWS_POLL_INTERVAL_HOURS))
     purge_task = asyncio.create_task(_purge_loop())
