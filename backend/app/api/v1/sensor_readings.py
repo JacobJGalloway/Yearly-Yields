@@ -49,7 +49,7 @@ async def list_sensor_readings(
     growing_area_id: Optional[uuid.UUID] = None,
     crop_cycle_id: Optional[uuid.UUID] = None,
     assessment_status: Optional[AssessmentStatus] = None,
-    limit: int = Query(default=100, ge=1, le=5000),
+    limit: int = Query(default=100, ge=1, le=20000),
     since: Optional[datetime] = Query(default=None, description="ISO timestamp — return readings at or after this time"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

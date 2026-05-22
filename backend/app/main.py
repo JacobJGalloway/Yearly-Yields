@@ -31,23 +31,33 @@ async def _run_nws_poll() -> None:
             select(GrowingArea).where(
                 GrowingArea.is_active.is_(True),
                 GrowingArea.nws_station_id.isnot(None),
+                GrowingArea.area_type != GrowingAreaType.dwc_greenhouse,
             )
         )
         areas = result.scalars().all()
 
+    cooldown = timedelta(seconds=settings.NWS_POLL_INTERVAL_HOURS * 3600 * 0.8)
+
     for area in areas:
         try:
-            if area.area_type == GrowingAreaType.dwc_greenhouse:
-                raw = await nws_service.simulate_greenhouse_reading(area)
-                source = ReadingSource.fiot
-            else:
-                raw = await nws_service.poll_latest(area.nws_station_id)
-                source = ReadingSource.nws
+            now = datetime.now(timezone.utc)
+
+            async with AsyncSessionLocal() as db:
+                latest = await db.execute(
+                    select(SensorReading.read_at)
+                    .where(SensorReading.growing_area_id == area.id)
+                    .order_by(SensorReading.read_at.desc())
+                    .limit(1)
+                )
+                latest_ts = latest.scalar_one_or_none()
+                if latest_ts and (now - latest_ts) < cooldown:
+                    continue
+
+            raw = await nws_service.poll_latest(area.nws_station_id)
 
             if raw is None:
                 continue
 
-            now = datetime.now(timezone.utc)
             reading_id = None
 
             async with AsyncSessionLocal() as db:
@@ -66,7 +76,7 @@ async def _run_nws_poll() -> None:
                     humidity=raw.get("humidity"),
                     wind_speed=raw.get("wind_speed"),
                     wind_direction=raw.get("wind_direction"),
-                    reading_source=source,
+                    reading_source=ReadingSource.nws,
                     read_at=raw["observed_at"],
                     received_at=now,
                     assessment_status=AssessmentStatus.pending,
@@ -75,7 +85,6 @@ async def _run_nws_poll() -> None:
                 await db.commit()
                 await db.refresh(reading)
                 reading_id = reading.id
-
 
             async with AsyncSessionLocal() as db:
                 await run_anomaly_check(reading_id, db)
@@ -103,13 +112,27 @@ async def _run_fiot_poll() -> None:
         )
         areas = result.scalars().all()
 
+    cooldown = timedelta(seconds=settings.FIOT_POLL_INTERVAL_HOURS * 3600 * 0.8)
+
     for area in areas:
         try:
+            now = datetime.now(timezone.utc)
+
+            async with AsyncSessionLocal() as db:
+                latest = await db.execute(
+                    select(SensorReading.read_at)
+                    .where(SensorReading.growing_area_id == area.id)
+                    .order_by(SensorReading.read_at.desc())
+                    .limit(1)
+                )
+                latest_ts = latest.scalar_one_or_none()
+                if latest_ts and (now - latest_ts) < cooldown:
+                    continue
+
             raw = await nws_service.simulate_greenhouse_reading(area)
             if raw is None:
                 continue
 
-            now = datetime.now(timezone.utc)
             reading_id = None
 
             async with AsyncSessionLocal() as db:

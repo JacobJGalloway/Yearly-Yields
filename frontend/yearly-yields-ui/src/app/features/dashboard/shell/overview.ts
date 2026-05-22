@@ -330,7 +330,13 @@ export class OverviewComponent implements OnInit {
       },
       legend: { bottom: 0, type: 'scroll' },
       grid: { top: 48, bottom: 48, left: 60, right: 24 },
-      xAxis: { type: 'time' },
+      xAxis: {
+        type: 'time',
+        splitNumber: 6,
+        axisLabel: {
+          formatter: (val: number) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        },
+      },
       yAxis: { type: 'value', name: '°F', nameLocation: 'end', axisLabel: { formatter: '{value}°' } },
       series,
     };
