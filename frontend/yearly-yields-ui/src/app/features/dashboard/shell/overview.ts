@@ -316,14 +316,16 @@ export class OverviewComponent implements OnInit {
       tooltip: {
         trigger: isAreaMode ? 'item' : 'axis',
         formatter: (params: any) => {
-          const pts = Array.isArray(params) ? params : [params];
+          const pts: any[] = Array.isArray(params) ? params : [params];
           if (!pts.length) return '';
-          const ts = pts[0]?.axisValue ?? pts[0]?.value?.[0] ?? pts[0]?.data?.[0];
-          const d = ts != null ? new Date(ts).toLocaleDateString() : '';
-          return (d ? `${d}<br>` : '') + pts
-            .filter((x: any) => x.value?.[1] != null)
-            .map((x: any) => `${x.marker}${x.seriesName}: ${(+x.value[1]).toFixed(1)}°F`)
-            .join('<br>');
+          // axisValue on a time axis is a ms timestamp (number); value[0] is the raw ISO string
+          const raw = pts[0].axisValueLabel ?? pts[0].value?.[0];
+          const d = raw != null ? new Date(raw).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          const lines = pts
+            .filter((p: any) => p.value != null && p.value[1] != null)
+            .map((p: any) => `${p.marker}${p.seriesName}: ${Number(p.value[1]).toFixed(1)}°F`);
+          if (!lines.length) return '';
+          return [d, ...lines].filter(Boolean).join('<br>');
         },
       },
       legend: { bottom: 0, type: 'scroll' },
