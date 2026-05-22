@@ -310,11 +310,10 @@ export class OverviewComponent implements OnInit {
       }
     }
 
-    const isAreaMode = this.sensorGroupBy === 'area';
     return {
       title: { text: 'Sensor Readings — Last 30 Days', left: 16, top: 8, textStyle: { fontSize: 14 } },
       tooltip: {
-        trigger: isAreaMode ? 'item' : 'axis',
+        trigger: 'axis',
         formatter: (params: any) => {
           const pts: any[] = Array.isArray(params) ? params : [params];
           if (!pts.length) return '';
