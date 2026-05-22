@@ -59,7 +59,6 @@ async def list_sensor_readings(
         .join(SensorReading.growing_area)
         .where(GrowingArea.owner_id == current_user.id)
         .order_by(SensorReading.read_at.desc())
-        .limit(limit)
     )
     if growing_area_id is not None:
         query = query.where(SensorReading.growing_area_id == growing_area_id)
@@ -69,6 +68,7 @@ async def list_sensor_readings(
         query = query.where(SensorReading.assessment_status == assessment_status)
     if since is not None:
         query = query.where(SensorReading.read_at >= since)
+    query = query.limit(limit)
 
     result = await db.execute(query)
     return [SensorReadingRead.model_validate(r) for r in result.scalars().all()]
