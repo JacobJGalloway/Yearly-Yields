@@ -332,7 +332,7 @@ export class OverviewComponent implements OnInit {
       grid: { top: 48, bottom: 48, left: 60, right: 24 },
       xAxis: {
         type: 'time',
-        splitNumber: 6,
+        minInterval: 7 * 24 * 3600 * 1000,
         axisLabel: {
           formatter: (val: number) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         },
