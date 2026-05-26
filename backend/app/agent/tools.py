@@ -111,7 +111,10 @@ YIELD_PLAN_TOOLS = [
     },
 ]
 
-ANOMALY_CHECK_TOOLS = [
+# Tools executed in-process by tool_handlers.py.
+# Read-only MCP tools (get_cycle_context, get_active_alert, get_recent_readings)
+# are fetched from the MCP server at runtime and merged in by loop.py.
+ANOMALY_WRITE_TOOLS = [
     {
         "name": "get_historical_context",
         "description": (
@@ -155,24 +158,6 @@ ANOMALY_CHECK_TOOLS = [
                 "growing_area_id": {
                     "type": "string",
                     "description": "UUID of the growing area. Used to resolve lat/lon for NOAA lookup.",
-                },
-            },
-            "required": ["growing_area_id"],
-        },
-    },
-    {
-        "name": "get_active_alert",
-        "description": (
-            "Check whether there is an active (unresolved) alert for the given growing area. "
-            "Returns the alert record if one exists, or null if none is active. "
-            "Always call this before creating a new alert."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "growing_area_id": {
-                    "type": "string",
-                    "description": "UUID of the growing area to check.",
                 },
             },
             "required": ["growing_area_id"],
@@ -299,5 +284,6 @@ ANOMALY_CHECK_TOOLS = [
             },
             "required": ["reading_id", "assessment_status", "assessment_summary"],
         },
+        "cache_control": {"type": "ephemeral"},
     },
 ]

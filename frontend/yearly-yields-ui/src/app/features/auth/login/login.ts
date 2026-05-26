@@ -8,9 +8,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Store } from '@ngrx/store';
 import { Observable } from 'rxjs';
 import { AsyncPipe, NgIf } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { AuthActions } from '../../../store/auth/auth.actions';
 import { selectAuthError, selectAuthLoading, selectIsAuthenticated } from '../../../store/auth/auth.selectors';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ThemeService, AppTheme } from '../../../core/services/theme.service';
 
 const LOGO_MAP: Record<AppTheme, string> = {
@@ -24,6 +25,7 @@ const LOGO_MAP: Record<AppTheme, string> = {
   standalone: true,
   imports: [
     ReactiveFormsModule,
+    RouterLink,
     MatCardModule,
     MatFormFieldModule,
     MatInputModule,
@@ -39,11 +41,13 @@ export class LoginComponent implements OnInit {
   private fb = inject(FormBuilder);
   private store = inject(Store);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   readonly themeService = inject(ThemeService);
 
   form: FormGroup;
   loading$: Observable<boolean>;
   error$: Observable<string | null>;
+  resetSuccess = false;
 
   constructor() {
     this.form = this.fb.group({
@@ -60,6 +64,7 @@ export class LoginComponent implements OnInit {
 
   ngOnInit(): void {
     this.themeService.init();
+    this.resetSuccess = this.route.snapshot.queryParamMap.get('reset') === 'success';
     this.store.select(selectIsAuthenticated).subscribe(isAuth => {
       if (isAuth) this.router.navigate(['/dashboard']);
     });

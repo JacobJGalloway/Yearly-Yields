@@ -6,6 +6,7 @@
 
   <mat-card class="login-card">
     <mat-card-content>
+      <div *ngIf="resetSuccess" class="reset-success">Password updated — sign in with your new password.</div>
       <form [formGroup]="form" (ngSubmit)="submit()">
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Email</mat-label>
@@ -34,6 +35,9 @@
           <span *ngIf="!(loading$ | async)">Sign In</span>
         </button>
       </form>
+      <div class="forgot-footer">
+        <a routerLink="/forgot-password">Forgot password?</a>
+      </div>
     </mat-card-content>
   </mat-card>
   </div>

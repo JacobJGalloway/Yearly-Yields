@@ -217,3 +217,6 @@ frontend/yearly-yields-ui/.angular/
 
 # Local dev SSL certs (not tracked — copy manually on fresh setup)
 frontend_local_backup/
+
+# Per-user chat memory files (runtime data, not source)
+backend/data/chat_memory/*.json

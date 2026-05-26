@@ -53,3 +53,20 @@ body {
   --mdc-icon-button-state-layer-color: transparent;
   background-color: transparent;
 }
+
+// Chips: harvest gold container, dark text label
+.mat-mdc-chip:not([disabled]) {
+  --mdc-chip-elevated-container-color: var(--yy-harvest-gold);
+  --mdc-chip-elevated-selected-container-color: var(--yy-harvest-gold);
+  --mdc-chip-label-text-color: var(--yy-text-black);
+  --mdc-chip-with-icon-icon-color: var(--yy-text-black);
+  --mdc-chip-with-trailing-icon-trailing-icon-color: var(--yy-text-black);
+}
+
+// FABs: harvest gold container, dark icon
+.mat-mdc-fab:not([disabled]),
+.mat-mdc-mini-fab:not([disabled]) {
+  --mdc-fab-container-color: var(--yy-harvest-gold);
+  --mdc-fab-small-container-color: var(--yy-harvest-gold);
+  color: var(--yy-text-black);
+}

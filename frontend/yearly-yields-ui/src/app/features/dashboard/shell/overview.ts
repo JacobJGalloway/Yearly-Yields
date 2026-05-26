@@ -1,10 +1,11 @@
-import { Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -13,15 +14,17 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
-import { forkJoin, switchMap } from 'rxjs';
+import { forkJoin, skip, switchMap } from 'rxjs';
 
 import { Store } from '@ngrx/store';
 import { Crop, CropCycle, CropService } from '../../../core/services/crop.service';
-import { DashboardService, ChatMessage, ChatResponse, WeeklySummary } from '../../../core/services/dashboard.service';
+import { DataGapService } from '../../../core/services/data-gap.service';
+import { DashboardService, ChatResponse, WeeklySummary } from '../../../core/services/dashboard.service';
 import { FieldService, GrowingArea } from '../../../core/services/field.service';
 import { SensorReading } from '../../../core/services/reading.service';
 import { selectUserRole } from '../../../store/auth/auth.selectors';
 import { BRAND } from '../../../core/brand';
+import { GapReviewDialogComponent } from './gap-review-dialog';
 
 const CHART_COLORS = [
   '#4e79a7', // steel blue
@@ -45,6 +48,7 @@ const CHART_COLORS = [
     MatButtonToggleModule,
     MatCardModule,
     MatChipsModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
@@ -57,20 +61,25 @@ const CHART_COLORS = [
   styleUrl: './overview.scss',
 })
 export class OverviewComponent implements OnInit {
-  @ViewChild('chatLog') private chatLogRef!: ElementRef<HTMLDivElement>;
-
   private cropService = inject(CropService);
   private fieldService = inject(FieldService);
-  private dashboardService = inject(DashboardService);
+  protected dashboardService = inject(DashboardService);
+  private gapService = inject(DataGapService);
+  private dialog = inject(MatDialog);
   private store = inject(Store);
   private destroyRef = inject(DestroyRef);
+  private cdr = inject(ChangeDetectorRef);
+
+  pendingGapCount = 0;
 
   chatInput = '';
   chatOpen = false;
   chatLoading = false;
-  chatHistory: ChatMessage[] = [];
   chatResponse: ChatResponse | null = null;
-  chatResponseOptions: EChartsOption | null = null;
+
+  get chatResponseOptions(): EChartsOption | null {
+    return this.chatResponse?.type === 'chart' ? this._buildChatChartOptions(this.chatResponse) : null;
+  }
 
   sensorLoading = true;
   cycleLoading = true;
@@ -84,11 +93,14 @@ export class OverviewComponent implements OnInit {
 
   sensorGroupBy: 'area' | 'station' = 'station'; // overridden by role in ngOnInit
   selectedAreaIds: string[] = [];
+  weeklyGroupBy: 'area' | 'station' = 'station'; // overridden by role in ngOnInit
+  selectedWeeklyAreaIds: string[] = [];
   allAreas: GrowingArea[] = [];
 
   allCrops: Crop[] = [];
 
   private _readings: SensorReading[] = [];
+  private _weeklySummaries: WeeklySummary[] = [];
   private _currentSeasonCycles: CropCycle[] = [];
   private _areaMap = new Map<string, string>();
   private _areaStationMap = new Map<string, string>();
@@ -103,8 +115,18 @@ export class OverviewComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Pre-initialize from service state so nav-back restores in-flight spinner/response.
+    this.chatOpen = this.dashboardService.chatOpen$.value;
+    this.chatLoading = this.dashboardService.chatLoading$.value;
+    this.chatResponse = this.dashboardService.chatResponse$.value;
+
+    this.dashboardService.chatOpen$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatOpen = v; this.cdr.detectChanges(); });
+    this.dashboardService.chatLoading$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatLoading = v; this.cdr.detectChanges(); });
+    this.dashboardService.chatResponse$.pipe(skip(1), takeUntilDestroyed(this.destroyRef)).subscribe(v => { this.chatResponse = v; this.cdr.detectChanges(); });
+
     this.store.select(selectUserRole).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(role => {
       this.sensorGroupBy = role === 'farmer' ? 'area' : 'station';
+      this.weeklyGroupBy = role === 'farmer' ? 'area' : 'station';
     });
 
     forkJoin({
@@ -135,7 +157,8 @@ export class OverviewComponent implements OnInit {
         this.sensorTrendOptions = this.buildSensorTrendOptions();
         this.sensorLoading = false;
 
-        this.weeklySummaryOptions = this.buildWeeklySummaryOptions(summaries);
+        this._weeklySummaries = summaries;
+        this.weeklySummaryOptions = this.buildWeeklySummaryOptions();
         this.weeklyLoading = false;
 
         this.yoyYieldOptions = this.buildYoYYieldOptions(allCycles);
@@ -149,6 +172,14 @@ export class OverviewComponent implements OnInit {
         this.yoyLoading = false;
       },
     });
+
+    this.gapService.list().subscribe(gaps => { this.pendingGapCount = gaps.length; });
+  }
+
+  openGapReview(): void {
+    this.dialog.open(GapReviewDialogComponent).afterClosed().subscribe(() => {
+      this.gapService.list().subscribe(gaps => { this.pendingGapCount = gaps.length; });
+    });
   }
 
   onGroupByChange(): void {
@@ -160,6 +191,15 @@ export class OverviewComponent implements OnInit {
     this.sensorTrendOptions = this.buildSensorTrendOptions();
   }
 
+  onWeeklyGroupByChange(): void {
+    this.selectedWeeklyAreaIds = [];
+    this.weeklySummaryOptions = this.buildWeeklySummaryOptions();
+  }
+
+  rebuildWeeklyChart(): void {
+    this.weeklySummaryOptions = this.buildWeeklySummaryOptions();
+  }
+
   rebuildCycleChart(): void {
     this.cycleProgressOptions = this.buildCropCycleProgressOptions(this._currentSeasonCycles);
   }
@@ -167,49 +207,12 @@ export class OverviewComponent implements OnInit {
   sendMessage(override?: string): void {
     const msg = (override ?? this.chatInput).trim();
     if (!msg || this.chatLoading) return;
-
     this.chatInput = '';
-    this.chatOpen = true;
-    this.chatResponse = null;
-    this.chatResponseOptions = null;
-    const historyBeforeSend = [...this.chatHistory];
-    this.chatHistory = [...this.chatHistory, { role: 'user', content: msg }];
-    this.chatLoading = true;
-
-    this.dashboardService.sendChatMessage(msg, historyBeforeSend).subscribe({
-      next: res => {
-        this.chatResponse = res;
-        this.chatResponseOptions = res.type === 'chart' ? this._buildChatChartOptions(res) : null;
-        const summary = this._responseToHistoryText(res);
-        this.chatHistory = [...this.chatHistory, { role: 'assistant', content: summary }];
-        this.chatLoading = false;
-      },
-      error: () => {
-        this.chatResponse = { type: 'text', content: 'Something went wrong. Please try again.' };
-        this.chatHistory = [
-          ...this.chatHistory,
-          { role: 'assistant', content: 'Error retrieving response.' },
-        ];
-        this.chatLoading = false;
-      },
-    });
+    this.dashboardService.sendChat(msg);
   }
 
   closeChat(): void {
-    this.chatOpen = false;
-    this.chatResponse = null;
-    this.chatResponseOptions = null;
-    this.chatHistory = [];
-  }
-
-  private _responseToHistoryText(res: ChatResponse): string {
-    switch (res.type) {
-      case 'chart': return `[Chart: ${res.title ?? 'data visualization'}]`;
-      case 'table': return `[Table: ${res.title ?? 'data table'}]`;
-      case 'link':  return `[Link provided: ${res.content ?? res.url}]`;
-      case 'clarifying_question': return `[Asked for clarification: ${res.content}]`;
-      default: return res.content ?? '';
-    }
+    this.dashboardService.closeChat();
   }
 
   private _buildChatChartOptions(res: ChatResponse): EChartsOption {
@@ -239,11 +242,6 @@ export class OverviewComponent implements OnInit {
     };
   }
 
-  private scrollChatToBottom(): void {
-    const el = this.chatLogRef?.nativeElement;
-    if (el) el.scrollTop = el.scrollHeight;
-  }
-
   private buildSensorTrendOptions(): EChartsOption {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
@@ -261,30 +259,28 @@ export class OverviewComponent implements OnInit {
         if (!byStation.has(station)) byStation.set(station, []);
         byStation.get(station)!.push(r);
       }
-
       for (const [station, stationReadings] of byStation) {
-        const byDate = new Map<string, number[]>();
+        // Average readings at the same timestamp across all areas in the station.
+        // Multiple areas share the same poll timestamps — concatenating them raw creates noise.
+        const byTs = new Map<string, number[]>();
         for (const r of stationReadings) {
           if (r.temperature == null) continue;
-          const dk = r.read_at.slice(0, 10);
-          if (!byDate.has(dk)) byDate.set(dk, []);
-          byDate.get(dk)!.push(r.temperature);
+          if (!byTs.has(r.read_at)) byTs.set(r.read_at, []);
+          byTs.get(r.read_at)!.push(r.temperature);
         }
-        const data = [...byDate.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([dk, temps]) => [
-            `${dk}T12:00:00.000Z`,
-            +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(2),
-          ]);
-
-        if (!data.length) continue;
+        const averaged = [...byTs.entries()]
+          .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+          .map(([ts, temps]) => [ts, +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)]);
+        const step = Math.max(1, Math.floor(averaged.length / 200));
+        const sampled = averaged.filter((_, i) => i % step === 0);
+        if (!sampled.length) continue;
         series.push({
           name: station,
           type: 'line',
           smooth: true,
           symbol: 'none',
           color: CHART_COLORS[colorIdx++ % CHART_COLORS.length],
-          data,
+          data: sampled,
         });
       }
     } else {
@@ -314,25 +310,32 @@ export class OverviewComponent implements OnInit {
       }
     }
 
-    const isAreaMode = this.sensorGroupBy === 'area';
     return {
       title: { text: 'Sensor Readings — Last 30 Days', left: 16, top: 8, textStyle: { fontSize: 14 } },
       tooltip: {
-        trigger: isAreaMode ? 'item' : 'axis',
+        trigger: 'axis',
         formatter: (params: any) => {
-          const pts = Array.isArray(params) ? params : [params];
+          const pts: any[] = Array.isArray(params) ? params : [params];
           if (!pts.length) return '';
-          const ts = pts[0]?.axisValue ?? pts[0]?.value?.[0] ?? pts[0]?.data?.[0];
-          const d = ts != null ? new Date(ts).toLocaleDateString() : '';
-          return (d ? `${d}<br>` : '') + pts
-            .filter((x: any) => x.value?.[1] != null)
-            .map((x: any) => `${x.marker}${x.seriesName}: ${(+x.value[1]).toFixed(1)}°F`)
-            .join('<br>');
+          // axisValue on a time axis is a ms timestamp (number); value[0] is the raw ISO string
+          const raw = pts[0].axisValueLabel ?? pts[0].value?.[0];
+          const d = raw != null ? new Date(raw).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          const lines = pts
+            .filter((p: any) => p.value != null && p.value[1] != null)
+            .map((p: any) => `${p.marker}${p.seriesName}: ${Number(p.value[1]).toFixed(1)}°F`);
+          if (!lines.length) return '';
+          return [d, ...lines].filter(Boolean).join('<br>');
         },
       },
       legend: { bottom: 0, type: 'scroll' },
       grid: { top: 48, bottom: 48, left: 60, right: 24 },
-      xAxis: { type: 'time', axisLabel: { formatter: (v: number) => new Date(v).toLocaleDateString() } },
+      xAxis: {
+        type: 'time',
+        minInterval: 7 * 24 * 3600 * 1000,
+        axisLabel: {
+          formatter: (val: number) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        },
+      },
       yAxis: { type: 'value', name: '°F', nameLocation: 'end', axisLabel: { formatter: '{value}°' } },
       series,
     };
@@ -435,28 +438,71 @@ export class OverviewComponent implements OnInit {
     };
   }
 
-  private buildWeeklySummaryOptions(summaries: WeeklySummary[]): EChartsOption {
+  private buildWeeklySummaryOptions(): EChartsOption {
+    const summaries = this._weeklySummaries;
     if (!summaries.length) return this.emptyChart('Weekly Sensor Averages');
 
-    const byWeek = new Map<string, { temps: number[]; humidities: number[] }>();
+    const avg = (arr: number[]) =>
+      arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
+
+    // Sort weeks chronologically by year + iso_week
+    const weekMeta = new Map<string, { year: number; iso_week: number }>();
     for (const s of summaries) {
-      if (!byWeek.has(s.week_label)) byWeek.set(s.week_label, { temps: [], humidities: [] });
-      const bucket = byWeek.get(s.week_label)!;
-      if (s.avg_temp_f != null) bucket.temps.push(s.avg_temp_f);
-      if (s.avg_humidity_pct != null) bucket.humidities.push(s.avg_humidity_pct);
+      if (!weekMeta.has(s.week_label)) weekMeta.set(s.week_label, { year: s.year, iso_week: s.iso_week });
+    }
+    const allWeeks = [...weekMeta.keys()].sort((a, b) => {
+      const ma = weekMeta.get(a)!;
+      const mb = weekMeta.get(b)!;
+      return ma.year !== mb.year ? ma.year - mb.year : ma.iso_week - mb.iso_week;
+    });
+
+    const isAreaMode = this.weeklyGroupBy === 'area';
+    const subtext = isAreaMode ? 'By Area  ·  solid=°F  /  dashed=%' : 'By Station  ·  solid=°F  /  dashed=%';
+
+    // Build groups: station name or area id → summaries
+    const groups = new Map<string, WeeklySummary[]>();
+    const filterIds = isAreaMode && this.selectedWeeklyAreaIds.length
+      ? new Set(this.selectedWeeklyAreaIds) : null;
+
+    for (const s of summaries) {
+      if (filterIds && !filterIds.has(s.growing_area_id)) continue;
+      const key = isAreaMode
+        ? s.growing_area_id
+        : (this._areaStationMap.get(s.growing_area_id) ?? 'Unknown');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(s);
     }
 
-    const labels = [...byWeek.keys()];
-    const avg = (arr: number[]) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
-    const avgTemp = labels.map(l => avg(byWeek.get(l)!.temps));
-    const avgHumidity = labels.map(l => avg(byWeek.get(l)!.humidities));
+    const series: any[] = [];
+    let colorIdx = 0;
+    for (const [key, groupSummaries] of groups) {
+      const byWeek = new Map<string, { temps: number[]; humidities: number[] }>();
+      for (const s of groupSummaries) {
+        if (!byWeek.has(s.week_label)) byWeek.set(s.week_label, { temps: [], humidities: [] });
+        const bucket = byWeek.get(s.week_label)!;
+        if (s.avg_temp_f != null) bucket.temps.push(s.avg_temp_f);
+        if (s.avg_humidity_pct != null) bucket.humidities.push(s.avg_humidity_pct);
+      }
+      const label = isAreaMode ? (this._areaMap.get(key) ?? key.slice(0, 8)) : key;
+      const color = CHART_COLORS[colorIdx++ % CHART_COLORS.length];
+      series.push({
+        name: `${label} Temp`,
+        type: 'line', smooth: true, symbolSize: 4, color, yAxisIndex: 0,
+        data: allWeeks.map(w => avg(byWeek.get(w)?.temps ?? [])),
+      });
+      series.push({
+        name: `${label} Humidity`,
+        type: 'line', smooth: true, symbolSize: 4, color,
+        lineStyle: { type: 'dashed' }, yAxisIndex: 1,
+        data: allWeeks.map(w => avg(byWeek.get(w)?.humidities ?? [])),
+      });
+    }
 
     return {
       title: {
         text: 'Weekly Sensor Averages',
-        subtext: 'All stations averaged  ·  °F  /  %',
-        left: 16,
-        top: 8,
+        subtext,
+        left: 16, top: 8,
         textStyle: { fontSize: 14 },
         subtextStyle: { fontSize: 11, color: '#757575' },
       },
@@ -465,41 +511,23 @@ export class OverviewComponent implements OnInit {
         formatter: (params: any) => {
           const pts = Array.isArray(params) ? params : [params];
           const week = pts[0]?.axisValue ?? '';
-          const lines = pts.map((x: any) => {
-            const unit = x.seriesName === 'Avg Temp' ? '°F' : '%';
-            return `${x.marker}<b>${x.seriesName}:</b> ${x.value ?? '—'}${unit}`;
-          });
+          const lines = pts
+            .filter((x: any) => x.value != null)
+            .map((x: any) => {
+              const unit = x.seriesName.endsWith('Temp') ? '°F' : '%';
+              return `${x.marker}${x.seriesName}: ${x.value}${unit}`;
+            });
           return `<b>${week}</b><br>${lines.join('<br>')}`;
         },
       },
-      grid: { top: 64, bottom: 24, left: 60, right: 60 },
-      xAxis: { type: 'category', data: labels, axisLabel: { rotate: 45, fontSize: 10 } },
+      legend: { bottom: 0, type: 'scroll' },
+      grid: { top: 64, bottom: 48, left: 60, right: 60 },
+      xAxis: { type: 'category', data: allWeeks, axisLabel: { rotate: 45, fontSize: 10 } },
       yAxis: [
         { type: 'value', axisLabel: { formatter: '{value}°' } },
         { type: 'value', axisLabel: { formatter: '{value}%' } },
       ],
-      series: [
-        {
-          name: 'Avg Temp',
-          type: 'line',
-          areaStyle: { opacity: 0.2 },
-          smooth: true,
-          symbolSize: 6,
-          color: '#4e79a7',
-          yAxisIndex: 0,
-          data: avgTemp,
-        },
-        {
-          name: 'Avg Humidity',
-          type: 'line',
-          areaStyle: { opacity: 0.15 },
-          smooth: true,
-          symbolSize: 6,
-          color: BRAND.harvestGold,
-          yAxisIndex: 1,
-          data: avgHumidity,
-        },
-      ],
+      series,
     };
   }
 

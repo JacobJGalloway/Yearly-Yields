@@ -5,12 +5,14 @@ Flow:
   1. Triggered by a sensor reading POST (via FastAPI BackgroundTask).
   2. Sends the reading context to Claude with the anomaly-check system prompt.
   3. Claude reasons and calls tools one at a time.
-  4. We execute each tool via dispatch_tool() and return the result.
+  4. MCP tools (get_cycle_context, get_active_alert, get_recent_readings) are
+     routed to the local MCP server; all other tools dispatch via tool_handlers.py.
   5. Loop ends when Claude calls log_reading_assessment (no more tool calls).
 """
 
+import json
 import uuid
-from datetime import date, timezone
+from typing import Any
 
 import anthropic
 from sqlalchemy import select
@@ -18,16 +20,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.prompts import ANOMALY_CHECK_SYSTEM_PROMPT
 from app.agent.tool_handlers import dispatch_tool
-from app.agent.tools import ANOMALY_CHECK_TOOLS
+from app.agent.tools import ANOMALY_WRITE_TOOLS
 from app.config import settings
-from app.core.crop_phases import get_phase_days
-from app.core.crop_ranges import get_crop_ranges
-from app.models.crop import Crop, CropCycle
+from app.mcp.client import get_session as get_mcp_session
 from app.models.sensor_reading import AssessmentStatus, SensorReading
 
 _client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 MAX_ITERATIONS = 10  # safety ceiling — prevents runaway loops
+
+_MCP_TOOL_NAMES = frozenset({"get_cycle_context", "get_active_alert", "get_recent_readings"})
+
+# Cached at first call — MCP tool schemas don't change at runtime.
+_mcp_tool_schemas: list[dict[str, Any]] | None = None
+
+
+async def _get_all_tools() -> list[dict[str, Any]]:
+    global _mcp_tool_schemas
+    if _mcp_tool_schemas is None:
+        result = await get_mcp_session().list_tools()
+        _mcp_tool_schemas = [
+            {
+                "name": t.name,
+                "description": t.description or "",
+                "input_schema": t.inputSchema,
+            }
+            for t in result.tools
+        ]
+    return _mcp_tool_schemas + ANOMALY_WRITE_TOOLS
+
+
+async def _call_mcp_tool(name: str, tool_input: dict[str, Any]) -> str:
+    result = await get_mcp_session().call_tool(name=name, arguments=tool_input)
+    if result.isError:
+        return json.dumps({"error": f"MCP tool {name} returned an error"})
+    if result.content and hasattr(result.content[0], "text"):
+        return result.content[0].text
+    return json.dumps({"error": "empty MCP response"})
 
 
 async def run_anomaly_check(reading_id: uuid.UUID, db: AsyncSession) -> None:
@@ -42,36 +71,6 @@ async def run_anomaly_check(reading_id: uuid.UUID, db: AsyncSession) -> None:
     reading.assessment_status = AssessmentStatus.processing
     await db.commit()
 
-    crop_context = ""
-    if reading.crop_cycle_id:
-        cycle_result = await db.execute(select(CropCycle).where(CropCycle.id == reading.crop_cycle_id))
-        cycle = cycle_result.scalar_one_or_none()
-        if cycle and cycle.crop_id:
-            crop_result = await db.execute(select(Crop).where(Crop.id == cycle.crop_id))
-            crop = crop_result.scalar_one_or_none()
-            if crop:
-                days_in = (date.today() - cycle.planted_at).days
-                phase_days = get_phase_days(
-                    crop.name,
-                    planted_at=cycle.planted_at,
-                    forecasted_end=cycle.forecasted_end_date,
-                )
-                if days_in < phase_days.seeding_days:
-                    phase = "seeding"
-                elif days_in < phase_days.seeding_days + phase_days.growing_days:
-                    phase = "growing"
-                else:
-                    phase = "harvest"
-
-                ranges = get_crop_ranges(crop.name)
-                if ranges:
-                    phase_range = getattr(ranges, phase)
-                    crop_context = (
-                        f"- Crop: {crop.name} (phase: {phase}, day {days_in} of cycle)\n"
-                        f"- Ideal temp range: {phase_range.temp_min_f}–{phase_range.temp_max_f}°F\n"
-                        f"- Ideal humidity range: {phase_range.humidity_min}–{phase_range.humidity_max}%\n"
-                    )
-
     user_message = (
         f"Assess this sensor reading:\n"
         f"- Reading ID: {reading.id}\n"
@@ -81,18 +80,18 @@ async def run_anomaly_check(reading_id: uuid.UUID, db: AsyncSession) -> None:
         f"- Source: {reading.reading_source.value}\n"
         f"- Read at: {reading.read_at.isoformat()}\n"
         f"- Crop Cycle ID: {reading.crop_cycle_id or 'none'}\n"
-        + crop_context
     )
 
     messages = [{"role": "user", "content": user_message}]
 
     try:
+        all_tools = await _get_all_tools()
         for _ in range(MAX_ITERATIONS):
             response = await _client.messages.create(
                 model=settings.CLAUDE_MODEL,
                 max_tokens=1024,
-                system=ANOMALY_CHECK_SYSTEM_PROMPT,
-                tools=ANOMALY_CHECK_TOOLS,
+                system=[{"type": "text", "text": ANOMALY_CHECK_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+                tools=all_tools,
                 messages=messages,
             )
 
@@ -109,12 +108,16 @@ async def run_anomaly_check(reading_id: uuid.UUID, db: AsyncSession) -> None:
                 if block.type != "tool_use":
                     continue
 
-                tool_result = await dispatch_tool(block.name, block.input, db)
+                if block.name in _MCP_TOOL_NAMES:
+                    tool_result = await _call_mcp_tool(block.name, block.input)
+                else:
+                    tool_result = await dispatch_tool(block.name, block.input, db)
+                    tool_result = str(tool_result)
 
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": str(tool_result),
+                    "content": tool_result,
                 })
 
                 # log_reading_assessment is always the final tool — stop after it

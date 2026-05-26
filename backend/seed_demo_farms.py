@@ -204,7 +204,7 @@ def main() -> None:
     gh2_cycle_specs = [
         (gh2_areas[0], tomato_id,  "2026-01-15", "2027-07-15"),
         (gh2_areas[1], tomato_id,  "2026-03-01", "2027-09-01"),
-        (gh2_areas[2], arugula_id, "2026-04-01", None),
+        (gh2_areas[2], arugula_id, "2026-04-01", "2026-07-01"),  # 24+25+42 = 91 days
     ]
     for area, crop_id, planted, end in gh2_cycle_specs:
         payload = {

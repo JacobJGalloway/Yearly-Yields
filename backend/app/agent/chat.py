@@ -13,6 +13,7 @@ Response types:
   text              — plain text (simple questions, "I don't know", errors)
 """
 
+import json
 import uuid
 from datetime import date, datetime
 from typing import Any
@@ -24,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.prompts import DASHBOARD_CHAT_SYSTEM_PROMPT
 from app.config import settings
+from app.mcp.client import get_session as get_mcp_session
 from app.models.alert import Alert, AlertStatus
 from app.models.crop import Crop, CropCycle, CropCycleStatus
 from app.models.field import GrowingArea
@@ -35,6 +37,26 @@ _client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 MAX_ITERATIONS = 8
 
 _RENDER_TOOLS = {"render_chart", "render_table", "provide_link", "ask_clarification"}
+_CHAT_MCP_TOOL_NAMES = frozenset({"get_chat_memory", "save_chat_memory"})
+
+# Cached at first call — MCP tool schemas don't change at runtime.
+_chat_mcp_tool_schemas: list[dict[str, Any]] | None = None
+
+
+async def _get_chat_tools() -> list[dict[str, Any]]:
+    global _chat_mcp_tool_schemas
+    if _chat_mcp_tool_schemas is None:
+        result = await get_mcp_session().list_tools()
+        _chat_mcp_tool_schemas = [
+            {
+                "name": t.name,
+                "description": t.description or "",
+                "input_schema": t.inputSchema,
+            }
+            for t in result.tools
+            if t.name in _CHAT_MCP_TOOL_NAMES
+        ]
+    return _chat_mcp_tool_schemas + _CHAT_TOOLS
 
 _CHAT_TOOLS = [
     # ── Existing data tools ───────────────────────────────────────────────────
@@ -246,6 +268,7 @@ _CHAT_TOOLS = [
             },
             "required": ["question"],
         },
+        "cache_control": {"type": "ephemeral"},
     },
 ]
 
@@ -257,6 +280,14 @@ async def run_chat(
     owner_id: str,
 ) -> dict[str, Any]:
     messages = [*history, {"role": "user", "content": message}]
+
+    # Inject session context on the first turn so Claude knows the user_id for memory tools.
+    # Goes in the user message (not system prompt) so the static system prompt stays cached.
+    if not history:
+        messages[0]["content"] = (
+            f"[Session context: user_id={owner_id}, date={date.today().isoformat()}]\n\n"
+            + messages[0]["content"]
+        )
 
     try:
         return await _run_chat_loop(messages, db, owner_id)
@@ -274,12 +305,13 @@ async def _run_chat_loop(
     db: AsyncSession,
     owner_id: str,
 ) -> dict[str, Any]:
+    all_tools = await _get_chat_tools()
     for _ in range(MAX_ITERATIONS):
         response = await _client.messages.create(
             model=settings.CLAUDE_MODEL,
             max_tokens=2048,
-            system=DASHBOARD_CHAT_SYSTEM_PROMPT,
-            tools=_CHAT_TOOLS,
+            system=[{"type": "text", "text": DASHBOARD_CHAT_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+            tools=all_tools,
             messages=messages,
         )
 
@@ -297,11 +329,22 @@ async def _run_chat_loop(
                     continue
                 if block.name in _RENDER_TOOLS:
                     return _build_render_response(block.name, block.input)
-                result = await _dispatch(block.name, block.input, db, owner_id)
+                if block.name in _CHAT_MCP_TOOL_NAMES:
+                    mcp_result = await get_mcp_session().call_tool(
+                        name=block.name, arguments=block.input
+                    )
+                    if mcp_result.isError:
+                        content = json.dumps({"error": f"MCP tool {block.name} returned an error"})
+                    elif mcp_result.content and hasattr(mcp_result.content[0], "text"):
+                        content = mcp_result.content[0].text
+                    else:
+                        content = json.dumps({"error": "empty MCP response"})
+                else:
+                    content = str(await _dispatch(block.name, block.input, db, owner_id))
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": str(result),
+                    "content": content,
                 })
             if tool_results:
                 messages.append({"role": "user", "content": tool_results})

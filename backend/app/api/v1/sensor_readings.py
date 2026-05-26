@@ -49,7 +49,8 @@ async def list_sensor_readings(
     growing_area_id: Optional[uuid.UUID] = None,
     crop_cycle_id: Optional[uuid.UUID] = None,
     assessment_status: Optional[AssessmentStatus] = None,
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=20000),
+    since: Optional[datetime] = Query(default=None, description="ISO timestamp — return readings at or after this time"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[SensorReadingRead]:
@@ -58,7 +59,6 @@ async def list_sensor_readings(
         .join(SensorReading.growing_area)
         .where(GrowingArea.owner_id == current_user.id)
         .order_by(SensorReading.read_at.desc())
-        .limit(limit)
     )
     if growing_area_id is not None:
         query = query.where(SensorReading.growing_area_id == growing_area_id)
@@ -66,6 +66,9 @@ async def list_sensor_readings(
         query = query.where(SensorReading.crop_cycle_id == crop_cycle_id)
     if assessment_status is not None:
         query = query.where(SensorReading.assessment_status == assessment_status)
+    if since is not None:
+        query = query.where(SensorReading.read_at >= since)
+    query = query.limit(limit)
 
     result = await db.execute(query)
     return [SensorReadingRead.model_validate(r) for r in result.scalars().all()]

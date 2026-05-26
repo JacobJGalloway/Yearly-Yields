@@ -22,4 +22,12 @@ export class AuthService {
   refresh(refreshToken: string): Observable<TokenResponse> {
     return this.http.post<TokenResponse>(`${this.url}/refresh`, { refresh_token: refreshToken });
   }
+
+  forgotPassword(email: string): Observable<void> {
+    return this.http.post<void>(`${this.url}/forgot-password`, { email });
+  }
+
+  resetPassword(token: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(`${this.url}/reset-password`, { token, new_password: newPassword });
+  }
 }

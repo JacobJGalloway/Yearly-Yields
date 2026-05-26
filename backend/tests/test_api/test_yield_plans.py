@@ -237,3 +237,100 @@ async def test_get_yield_plan_not_found(client: AsyncClient, owner_token: str):
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_yield_plan_success(
+    client: AsyncClient,
+    owner_token: str,
+    active_cycle: CropCycle,
+    db: AsyncSession,
+):
+    plan = await make_mock_plan(active_cycle, db)
+
+    response = await client.get(
+        f"/api/v1/yield-plans/{plan.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == str(plan.id)
+
+
+@pytest.mark.asyncio
+async def test_list_yield_plans_filtered_by_crop_cycle_id(
+    client: AsyncClient,
+    owner_token: str,
+    active_cycle: CropCycle,
+    db: AsyncSession,
+    growing_area: GrowingArea,
+    crop: Crop,
+):
+    plan = await make_mock_plan(active_cycle, db)
+
+    other_cycle = CropCycle(
+        growing_area_id=growing_area.id,
+        crop_id=crop.id,
+        season_year=2026,
+        cycle_number=3,
+        planted_at=date(2026, 5, 1),
+        yield_unit=YieldUnit.bushels,
+        status=CropCycleStatus.active,
+    )
+    db.add(other_cycle)
+    await db.flush()
+
+    response = await client.get(
+        f"/api/v1/yield-plans/?crop_cycle_id={active_cycle.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == str(plan.id)
+
+
+@pytest.mark.asyncio
+async def test_create_yield_plan_agent_returns_none(
+    client: AsyncClient,
+    owner_token: str,
+    active_cycle: CropCycle,
+):
+    """When the agent loop returns None the endpoint responds 500."""
+    with patch(
+        "app.api.v1.yield_plans.generate_yield_plan",
+        new=AsyncMock(return_value=None),
+    ):
+        response = await client.post(
+            "/api/v1/yield-plans/",
+            json={"crop_cycle_id": str(active_cycle.id), "target_yield": 7000.0},
+            headers=auth_headers(owner_token),
+        )
+    assert response.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_create_yield_plan_active_cycle_no_crop(
+    client: AsyncClient,
+    owner_token: str,
+    db: AsyncSession,
+    growing_area: GrowingArea,
+):
+    """Active cycle with no crop_id assigned returns 422."""
+    no_crop_cycle = CropCycle(
+        growing_area_id=growing_area.id,
+        crop_id=None,
+        season_year=2026,
+        cycle_number=5,
+        planted_at=date(2026, 5, 1),
+        yield_unit=YieldUnit.bushels,
+        status=CropCycleStatus.active,
+    )
+    db.add(no_crop_cycle)
+    await db.flush()
+
+    response = await client.post(
+        "/api/v1/yield-plans/",
+        json={"crop_cycle_id": str(no_crop_cycle.id), "target_yield": 5000.0},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 422

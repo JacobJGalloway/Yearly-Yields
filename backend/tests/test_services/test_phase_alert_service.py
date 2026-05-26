@@ -1,11 +1,11 @@
 """
 Tests for phase_alert_service._check_all_cycles.
 
+Phase detection still runs daily; it now logs instead of creating alerts.
 Covers:
-  - Creates harvest_ready alert for cycle in harvest phase
+  - Does NOT create any alert for a cycle in harvest phase
   - Skips cycle that has not yet reached harvest phase
   - Skips inactive (fallow) cycles entirely
-  - Does not create duplicate alert when active harvest_ready alert already exists
 """
 
 from datetime import date, timedelta
@@ -15,7 +15,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.alert import Alert, AlertStatus, AlertType
+from app.models.alert import Alert
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
 from app.models.field import GrowingArea, GrowingAreaType
 from app.models.user import User
@@ -48,7 +48,7 @@ async def corn_crop(db: AsyncSession) -> Crop:
     return crop
 
 
-async def test_creates_alert_for_cycle_in_harvest_phase(
+async def test_no_alert_created_for_harvest_phase_cycle(
     db: AsyncSession, area: GrowingArea, corn_crop: Crop
 ):
     planted = date.today() - timedelta(days=150)
@@ -66,16 +66,8 @@ async def test_creates_alert_for_cycle_in_harvest_phase(
 
     await _check_all_cycles(db)
 
-    result = await db.execute(
-        select(Alert).where(
-            Alert.crop_cycle_id == cycle.id,
-            Alert.alert_type == AlertType.harvest_ready,
-        )
-    )
-    alert = result.scalar_one_or_none()
-    assert alert is not None
-    assert alert.status == AlertStatus.active
-    assert alert.triggering_reading_id is None
+    result = await db.execute(select(Alert).where(Alert.crop_cycle_id == cycle.id))
+    assert result.scalar_one_or_none() is None
 
 
 async def test_skips_cycle_not_in_harvest_phase(
@@ -97,9 +89,7 @@ async def test_skips_cycle_not_in_harvest_phase(
 
     await _check_all_cycles(db)
 
-    result = await db.execute(
-        select(Alert).where(Alert.crop_cycle_id == cycle.id)
-    )
+    result = await db.execute(select(Alert).where(Alert.crop_cycle_id == cycle.id))
     assert result.scalar_one_or_none() is None
 
 
@@ -121,43 +111,5 @@ async def test_skips_fallow_cycle(
 
     await _check_all_cycles(db)
 
-    result = await db.execute(
-        select(Alert).where(Alert.crop_cycle_id == cycle.id)
-    )
+    result = await db.execute(select(Alert).where(Alert.crop_cycle_id == cycle.id))
     assert result.scalar_one_or_none() is None
-
-
-async def test_does_not_duplicate_existing_active_alert(
-    db: AsyncSession, area: GrowingArea, corn_crop: Crop
-):
-    planted = date.today() - timedelta(days=150)
-    cycle = CropCycle(
-        growing_area_id=area.id,
-        crop_id=corn_crop.id,
-        season_year=2026,
-        cycle_number=4,
-        planted_at=planted,
-        yield_unit=YieldUnit.bushels,
-        status=CropCycleStatus.active,
-    )
-    db.add(cycle)
-    await db.flush()
-
-    existing = Alert(
-        growing_area_id=area.id,
-        crop_cycle_id=cycle.id,
-        triggering_reading_id=None,
-        alert_type=AlertType.harvest_ready,
-        status=AlertStatus.active,
-        assessment_summary="Already alerted.",
-    )
-    db.add(existing)
-    await db.flush()
-
-    await _check_all_cycles(db)
-
-    result = await db.execute(
-        select(Alert).where(Alert.crop_cycle_id == cycle.id)
-    )
-    alerts = result.scalars().all()
-    assert len(alerts) == 1

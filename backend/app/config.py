@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     FIOT_DEFAULT_HUMIDITY_PCT: float = 65.0  # fallback target humidity when area.target_humidity_pct is null
 
     PURGE_INTERVAL_HOURS: int = 24  # how often the nightly sensor reading purge runs
+    GAP_THRESHOLD_DAYS: int = 7    # NWS data gap duration that triggers an approval prompt
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60  # how long a reset link remains valid
     PHASE_CHECK_INTERVAL_HOURS: int = 24  # how often to check crop cycles for harvest phase entry
 
     # Data retention
@@ -51,6 +53,9 @@ class Settings(BaseSettings):
     DAILY_RETENTION_DAYS: int = 90
     # MM-DD dates on which the summarization job runs (quarterly by default).
     SUMMARIZATION_DATES: list[str] = ["03-31", "06-30", "09-30", "12-31"]
+    # Weekly sensor summaries older than this many years are purged each Dec 31.
+    # Default: 5 years. Summaries are low-volume aggregates; keep longer than raw readings.
+    WEEKLY_SUMMARY_RETENTION_YEARS: int = 5
 
     # Alerts
     # How many hours must pass before a repeat email is sent for an active alert.

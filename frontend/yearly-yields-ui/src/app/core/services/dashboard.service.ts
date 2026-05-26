@@ -1,6 +1,6 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, NgZone, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import { CropCycle } from './crop.service';
@@ -43,6 +43,7 @@ export interface ChatResponse {
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
   private http = inject(HttpClient);
+  private ngZone = inject(NgZone);
   private cyclesBase = '/api/v1/crops/cycles';
   private readingsBase = '/api/v1/readings';
   private chatBase = '/api/v1/agent/chat';
@@ -58,7 +59,11 @@ export class DashboardService {
   }
 
   getRecentReadings(limit = environment.dashboardReadingsLimit): Observable<SensorReading[]> {
-    const params = new HttpParams().set('limit', limit);
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const params = new HttpParams()
+      .set('limit', limit)
+      .set('since', since.toISOString());
     return this.http.get<SensorReading[]>(`${this.readingsBase}/`, { params });
   }
 
@@ -67,7 +72,47 @@ export class DashboardService {
     return this.http.get<WeeklySummary[]>(`${this.readingsBase}/weekly-summary`, { params });
   }
 
-  sendChatMessage(message: string, history: ChatMessage[]): Observable<ChatResponse> {
-    return this.http.post<ChatResponse>(this.chatBase + '/', { message, history });
+  // ── Chat UI state ─────────────────────────────────────────────────────────
+  chatOpen$ = new BehaviorSubject(false);
+  chatLoading$ = new BehaviorSubject(false);
+  chatResponse$ = new BehaviorSubject<ChatResponse | null>(null);
+  chatHistory: ChatMessage[] = [];
+
+  sendChat(message: string): void {
+    if (this.chatLoading$.value) return;
+    const historyBeforeSend = [...this.chatHistory];
+    this.chatHistory = [...this.chatHistory, { role: 'user', content: message }];
+    this.chatOpen$.next(true);
+    this.chatResponse$.next(null);
+    this.chatLoading$.next(true);
+
+    this.http.post<ChatResponse>(this.chatBase + '/', { message, history: historyBeforeSend }).subscribe({
+      next: res => this.ngZone.run(() => {
+        this.chatResponse$.next(res);
+        this.chatHistory = [...this.chatHistory, { role: 'assistant', content: this._chatHistoryText(res) }];
+        this.chatLoading$.next(false);
+      }),
+      error: () => this.ngZone.run(() => {
+        this.chatResponse$.next({ type: 'text', content: 'Something went wrong. Please try again.' });
+        this.chatHistory = [...this.chatHistory, { role: 'assistant', content: 'Error retrieving response.' }];
+        this.chatLoading$.next(false);
+      }),
+    });
+  }
+
+  closeChat(): void {
+    this.chatOpen$.next(false);
+    this.chatResponse$.next(null);
+    this.chatHistory = [];
+  }
+
+  private _chatHistoryText(res: ChatResponse): string {
+    switch (res.type) {
+      case 'chart': return `[Chart: ${res.title ?? 'data visualization'}]`;
+      case 'table': return `[Table: ${res.title ?? 'data table'}]`;
+      case 'link':  return `[Link provided: ${res.content ?? res.url}]`;
+      case 'clarifying_question': return `[Asked for clarification: ${res.content}]`;
+      default: return res.content ?? '';
+    }
   }
 }

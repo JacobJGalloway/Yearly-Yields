@@ -1,12 +1,9 @@
 """
-Phase alert service — daily check for crop cycles that have entered harvest phase.
+Phase notification stub — daily check for crop cycles that have entered harvest phase.
 
-Runs once on startup (catch-up for any days the server was down) and then daily
-via the phase check loop in main.py. Idempotent: skips cycles that already have
-an active harvest_ready alert.
-
-Harvest_ready alerts are auto-resolved in the crop cycle update endpoint when
-the cycle transitions to any terminal state (harvested, abandoned, transplanted).
+Runs once on startup and then daily via the phase check loop in main.py.
+Currently logs only. A proper notification/event service (v1.2) will replace
+the log lines with push notifications or in-app events.
 """
 
 import logging
@@ -17,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crop_phases import get_phase_days
 from app.db.session import AsyncSessionLocal
-from app.models.alert import Alert, AlertStatus, AlertType
 from app.models.crop import Crop, CropCycle, CropCycleStatus
 from app.models.field import GrowingArea
 
@@ -39,7 +35,7 @@ async def _check_all_cycles(db: AsyncSession) -> None:
     rows = result.all()
 
     today = date.today()
-    alerted = 0
+    harvest_ready_count = 0
 
     for row in rows:
         cycle: CropCycle = row.CropCycle
@@ -52,35 +48,16 @@ async def _check_all_cycles(db: AsyncSession) -> None:
         if days_in < pd.seeding_days + pd.growing_days:
             continue
 
-        existing = await db.execute(
-            select(Alert).where(
-                Alert.crop_cycle_id == cycle.id,
-                Alert.alert_type == AlertType.harvest_ready,
-                Alert.status == AlertStatus.active,
-            )
-        )
-        if existing.scalar_one_or_none() is not None:
-            continue
-
         days_in_harvest = days_in - (pd.seeding_days + pd.growing_days)
-        db.add(Alert(
-            growing_area_id=cycle.growing_area_id,
-            crop_cycle_id=cycle.id,
-            triggering_reading_id=None,
-            alert_type=AlertType.harvest_ready,
-            status=AlertStatus.active,
-            assessment_summary=(
-                f"{crop_name} in {area_name} entered harvest phase "
-                f"{days_in_harvest} day(s) ago (day {days_in} of cycle)."
-            ),
-        ))
-        alerted += 1
-
-    if alerted:
-        await db.commit()
+        logger.info(
+            "Harvest-ready: %s in %s — day %d of cycle (%d day(s) in harvest phase). "
+            "Notification service (v1.2) will surface this event.",
+            crop_name, area_name, days_in, days_in_harvest,
+        )
+        harvest_ready_count += 1
 
     logger.info(
-        "Phase check complete: %d active cycle(s) checked, %d harvest_ready alert(s) created.",
+        "Phase check complete: %d active cycle(s) checked, %d in harvest phase.",
         len(rows),
-        alerted,
+        harvest_ready_count,
     )

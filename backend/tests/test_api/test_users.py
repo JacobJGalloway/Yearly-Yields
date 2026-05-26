@@ -145,3 +145,17 @@ async def test_update_user_not_found(client: AsyncClient, owner_token: str):
         json={"full_name": "Ghost"},
     )
     assert r.status_code == 404
+
+
+async def test_update_user_phone_and_address(
+    client: AsyncClient, farmer_token: str, farmer_user
+):
+    r = await client.patch(
+        f"/api/v1/users/{farmer_user.id}",
+        headers=auth_headers(farmer_token),
+        json={"phone": "555-1234", "address": "123 Main St"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["phone"] == "555-1234"
+    assert data["address"] == "123 Main St"
