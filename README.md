@@ -99,7 +99,7 @@ cd backend
 python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=50
 ```
 
-- **Current coverage:** 282 tests, 87.76% — all service and API layers covered. Remaining gap is in `main.py` lifespan code and `agent/chat.py` streaming loop, which require integration-level infrastructure to cover meaningfully.
+- **Current coverage:** 338 tests, ~85% — all service and API layers covered. Remaining gaps are excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
 
 ## First-time setup
 
@@ -138,7 +138,7 @@ run the following scripts in this order (all scripts are in backend folder) -
 
 ## Account recovery
 
-There is no self-service password reset yet (planned for v1.2). If you are locked out, reset directly via the database:
+A forgot password / reset flow is available on the login page (v1.1). If you are locked out and cannot receive the reset email, reset directly via the database:
 
 ```bash
 # 1. Generate a bcrypt hash for your new password (run from backend/)
@@ -179,6 +179,7 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 - **Forgot password / password reset flow** — New users are currently assigned an initial password at creation. Add a forgot password flow (email link → reset form) on the login page. The same flow covers forced resets for expired or temporary passwords.
 
 ### v1.2
+- **`GrowingAreaPlot` sub-area model** *(schema-breaking — prerequisite for several items below)* — Introduces a `GrowingAreaPlot` layer between `GrowingArea` and `CropCycle`, enabling greenhouse row management and open-field trial plots. Greenhouse rows run staggered crop cycles (e.g., GH1 rows 1/2/3 harvested on different weekday pairs); open fields get `plot_id = 0` transparently. NWS readings stay at the area level; crop cycles, alerts, and sensor readings move to the plot level. All agent tools become plot-aware.
 - **AI-guided yield plan wizard** — Replace the static "Generate Yield Plan" form with a conversational wizard. The agent asks the farmer a structured set of questions (growing area, current phase, historical yield, market demand) and synthesizes the answers into a recommended target yield with reasoning. The final decision stays with the owner or farmer. Requires growing area selection support, which is absent from the current form.
 - **pgvector embedding purge** — Remove voyage-3 embeddings from `pgvector` for sensor readings that have been deleted or rolled into weekly summaries, preventing the vector store from growing unboundedly.
 - **User-to-growing-area assignment model** — Allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
