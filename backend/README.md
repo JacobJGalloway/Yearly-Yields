@@ -183,6 +183,18 @@ The reading is saved immediately with `assessment_status: pending` and the respo
 - A repeat email is sent only after `ALERT_EMAIL_INTERVAL_HOURS` have passed since the last email (default 24h, configurable 4–72h in `.env`)
 - An active alert is resolved automatically after 3 consecutive normal readings (`ALERT_RESOLUTION_THRESHOLD`, configurable 1–10)
 
+### Sensor data sources
+
+NWS is a nearby proxy, not a field-level source of truth. For open fields the gap is microclimate (elevation, drainage, wind exposure). For greenhouses the gap is the building envelope — fIoT modeling replaces or adjusts the outdoor conditions.
+
+| Area type | Mode | Source of data |
+|---|---|---|
+| Open field | NWS poll | Nearby NWS station — best available proxy, not ground truth |
+| Greenhouse (no `target_temp_f`) | Passive fIoT | NWS ambient + building offsets (`temp_offset_f`, `humidity_offset_pct`) |
+| Greenhouse (`target_temp_f` set) | Active fIoT | HVAC setpoint ± Gaussian noise — NWS conditions irrelevant |
+
+This is why readings carry a `reading_source` field and why anomaly detection uses phase-specific ideal ranges rather than raw NWS comparison. Anomalous readings are always evaluated against what that area's conditions *should* be, not what the outdoor weather *is*.
+
 ## Crop cycle state machine
 
 Crop cycles move through a defined set of states. Invalid transitions are rejected with `422`.
@@ -224,6 +236,26 @@ voided — terminal
 ```
 
 **Note:** An invoice will not be auto-generated if the cycle has no `actual_yield`, no active `CropRate`, or no `default_harvest_customer` on the crop. Check all three if an expected invoice is missing after harvest.
+
+## Data gaps
+
+The system tracks when a growing area stops receiving readings. Any area that hasn't had a reading in more than `GAP_THRESHOLD_DAYS` (default 7, configurable in `.env`) is considered a data gap.
+
+```
+GET /api/v1/data-gaps/
+Authorization: Bearer <token>
+```
+
+Returns a list of areas with stale or missing readings. Greenhouse areas and areas without an NWS station assigned are excluded — only areas where data should be flowing are included.
+
+To suppress a gap (e.g., the field is fallow and monitoring is intentionally paused):
+
+```
+POST /api/v1/data-gaps/{area_id}/acknowledge
+Authorization: Bearer <token>
+```
+
+Returns `204`. The area is excluded from future gap reports for another `GAP_THRESHOLD_DAYS` window.
 
 ## Alert lifecycle
 

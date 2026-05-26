@@ -108,7 +108,7 @@ Tests use a separate `yearly_yields_test` database. Create it once:
 ```bash
 docker exec -it yearly_yields_db psql -U user -c "CREATE DATABASE yearly_yields_test;"
 ```
-Each test runs inside a rolled-back transaction (outer connection-level savepoint in `conftest.py`). Current coverage: 53 tests, ~71% — gaps in invoice service, yield service, vector service.
+Each test runs inside a rolled-back transaction (outer connection-level savepoint in `conftest.py`). Current coverage: 338 tests, ~85% — excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
 
 ## Known gaps / active TODOs
 
