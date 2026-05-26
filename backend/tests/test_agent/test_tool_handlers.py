@@ -7,6 +7,7 @@ All handlers here are pure DB operations; no Anthropic API is required
 
 import uuid
 from datetime import date, datetime, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.tool_handlers import (
     dispatch_tool,
     dispatch_yield_tool,
+    handle_get_historical_context,
     handle_create_alert,
     handle_get_active_alert,
     handle_get_cycle_yield_history,
@@ -321,3 +323,78 @@ async def test_dispatch_tool_unknown(db: AsyncSession):
     result = await dispatch_tool("not_a_real_tool", {}, db)
     assert "error" in result
     assert "Unknown tool" in result["error"]
+
+
+async def test_dispatch_tool_handler_exception_caught(db: AsyncSession):
+    """Handler that raises an internal exception returns an error dict."""
+    result = await dispatch_tool(
+        "get_historical_context",
+        {"growing_area_id": "not-a-uuid", "crop_id": "not-a-uuid", "temperature": 72.0, "humidity": 60.0},
+        db,
+    )
+    assert "error" in result
+
+
+async def test_dispatch_yield_tool_handler_exception_caught(db: AsyncSession):
+    """Yield tool handler that raises returns an error dict."""
+    result = await dispatch_yield_tool(
+        "get_sensor_history",
+        {"growing_area_id": "not-a-uuid"},
+        db,
+    )
+    assert "error" in result
+
+
+# ── Historical context ────────────────────────────────────────────────────────
+
+async def test_handle_get_historical_context_unknown_crop_or_area(
+    db: AsyncSession, area: GrowingArea
+):
+    result = await handle_get_historical_context(
+        {
+            "growing_area_id": str(area.id),
+            "crop_id": str(uuid.uuid4()),
+            "temperature": 72.0,
+            "humidity": 60.0,
+        },
+        db,
+    )
+    assert result["status"] == "no_data"
+    assert "not found" in result["message"]
+
+
+async def test_handle_get_historical_context_no_summaries(
+    db: AsyncSession, area: GrowingArea, corn: Crop
+):
+    with patch("app.agent.tool_handlers.generate_embedding", new=AsyncMock(return_value=[0.1] * 10)), \
+         patch("app.agent.tool_handlers.find_similar_weeks", new=AsyncMock(return_value=[])):
+        result = await handle_get_historical_context(
+            {
+                "growing_area_id": str(area.id),
+                "crop_id": str(corn.id),
+                "temperature": 72.0,
+                "humidity": 60.0,
+            },
+            db,
+        )
+    assert result["status"] == "no_data"
+    assert result["summaries"] == []
+
+
+async def test_handle_get_historical_context_with_summaries(
+    db: AsyncSession, area: GrowingArea, corn: Crop
+):
+    mock_summaries = [{"week": 1, "avg_temp": 72.0}]
+    with patch("app.agent.tool_handlers.generate_embedding", new=AsyncMock(return_value=[0.1] * 10)), \
+         patch("app.agent.tool_handlers.find_similar_weeks", new=AsyncMock(return_value=mock_summaries)):
+        result = await handle_get_historical_context(
+            {
+                "growing_area_id": str(area.id),
+                "crop_id": str(corn.id),
+                "temperature": 72.0,
+                "humidity": 60.0,
+            },
+            db,
+        )
+    assert result["status"] == "ok"
+    assert result["summaries"] == mock_summaries

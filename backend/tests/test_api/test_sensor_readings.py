@@ -224,6 +224,89 @@ async def test_weekly_summary_returns_valid_structure(
 
 
 @pytest.mark.asyncio
+async def test_list_readings_filter_by_since(
+    client: AsyncClient,
+    owner_token: str,
+    growing_area: GrowingArea,
+):
+    """?since= excludes readings before the cutoff."""
+    import uuid as uuidlib
+    from unittest.mock import AsyncMock, patch
+
+    with patch("app.api.v1.sensor_readings.run_anomaly_check", new=AsyncMock()):
+        await client.post(
+            "/api/v1/readings/",
+            json={
+                "growing_area_id": str(growing_area.id),
+                "temperature": 70.0,
+                "humidity": 55.0,
+                "reading_source": "manual",
+                "read_at": "2020-01-01T00:00:00Z",
+            },
+            headers=auth_headers(owner_token),
+        )
+
+    response = await client.get(
+        "/api/v1/readings/?since=2025-01-01T00:00:00Z",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert all(r["read_at"] >= "2025-01-01T00:00:00Z" for r in response.json())
+
+
+@pytest.mark.asyncio
+async def test_list_readings_filter_by_crop_cycle_id(
+    client: AsyncClient,
+    owner_token: str,
+    growing_area: GrowingArea,
+    db: AsyncSession,
+):
+    """?crop_cycle_id= returns only readings for that cycle."""
+    import uuid as uuidlib
+    from datetime import date
+    from unittest.mock import AsyncMock, patch
+    from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
+
+    crop = Crop(name="cycle_filter_crop", greenhouse_compatible=False, typical_cycle_days=120)
+    db.add(crop)
+    await db.flush()
+    cycle = CropCycle(
+        growing_area_id=growing_area.id,
+        crop_id=crop.id,
+        season_year=2026,
+        cycle_number=77,
+        planted_at=date(2026, 4, 1),
+        yield_unit=YieldUnit.bushels,
+        status=CropCycleStatus.active,
+    )
+    db.add(cycle)
+    await db.flush()
+
+    with patch("app.api.v1.sensor_readings.run_anomaly_check", new=AsyncMock()):
+        await client.post(
+            "/api/v1/readings/",
+            json={
+                "growing_area_id": str(growing_area.id),
+                "crop_cycle_id": str(cycle.id),
+                "temperature": 72.0,
+                "humidity": 60.0,
+                "reading_source": "manual",
+                "read_at": "2026-05-01T10:00:00Z",
+            },
+            headers=auth_headers(owner_token),
+        )
+
+    response = await client.get(
+        f"/api/v1/readings/?crop_cycle_id={cycle.id}",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 1
+    assert all(r["crop_cycle_id"] == str(cycle.id) for r in data)
+
+
+@pytest.mark.asyncio
 async def test_weekly_summary_empty_for_unknown_area(
     client: AsyncClient,
     owner_token: str,

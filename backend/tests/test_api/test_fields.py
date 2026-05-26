@@ -221,3 +221,43 @@ async def test_update_field_not_found(client: AsyncClient, owner_token: str):
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_field_sensor_config(client: AsyncClient, owner_token: str):
+    """PATCH endpoint covers all optional sensor/area columns."""
+    create_resp = await client.post(
+        "/api/v1/fields/",
+        json={
+            "name": "Sensor Config Field",
+            "area_type": "dwc_greenhouse",
+            "latitude": 36.2,
+            "longitude": -83.3,
+            "area_sqft": 5000.0,
+        },
+        headers=auth_headers(owner_token),
+    )
+    assert create_resp.status_code == 201
+    area_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/fields/{area_id}",
+        json={
+            "area_acres": 22.0,
+            "area_sqft": 6000.0,
+            "nws_station_id": "KMOR",
+            "temp_offset_f": 2.5,
+            "humidity_offset_pct": -5.0,
+            "target_temp_f": 72.0,
+            "target_humidity_pct": 65.0,
+        },
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["area_sqft"] == 6000.0
+    assert data["nws_station_id"] == "KMOR"
+    assert data["temp_offset_f"] == 2.5
+    assert data["humidity_offset_pct"] == -5.0
+    assert data["target_temp_f"] == 72.0
+    assert data["target_humidity_pct"] == 65.0

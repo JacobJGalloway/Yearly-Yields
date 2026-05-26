@@ -182,6 +182,16 @@ async def test_resolve_to_invalid_status_returns_422(
 
 
 @pytest.mark.asyncio
+async def test_patch_alert_not_found(client: AsyncClient, owner_token: str):
+    response = await client.patch(
+        f"/api/v1/alerts/{uuid.uuid4()}",
+        json={"status": "resolved"},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_patch_alert_unauthenticated(client: AsyncClient, active_alert: Alert):
     response = await client.patch(
         f"/api/v1/alerts/{active_alert.id}",

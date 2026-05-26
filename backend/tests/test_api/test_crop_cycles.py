@@ -542,3 +542,59 @@ async def test_update_cycle_fields(
     data = response.json()
     assert data["target_yield"] == 6000.0
     assert data["forecasted_end_date"] == "2026-10-01"
+
+
+@pytest.mark.asyncio
+async def test_update_cycle_not_found(client: AsyncClient, owner_token: str):
+    import uuid
+    response = await client.patch(
+        f"/api/v1/crops/cycles/{uuid.uuid4()}",
+        headers=auth_headers(owner_token),
+        json={"target_yield": 1000.0},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_planned_crop_id(
+    client: AsyncClient, owner_token: str, fallow_cycle_no_plan: CropCycle, corn: Crop
+):
+    """PATCH planned_crop_id on a fallow cycle prepares it for activation."""
+    response = await client.patch(
+        f"/api/v1/crops/cycles/{fallow_cycle_no_plan.id}",
+        headers=auth_headers(owner_token),
+        json={"planned_crop_id": str(corn.id)},
+    )
+    assert response.status_code == 200
+    assert response.json()["planned_crop_id"] == str(corn.id)
+
+
+@pytest.mark.asyncio
+async def test_fallow_to_active_greenhouse_incompatible_crop_rejected(
+    client: AsyncClient,
+    owner_token: str,
+    db: AsyncSession,
+    greenhouse: GrowingArea,
+    corn: Crop,
+):
+    """Activating a fallow greenhouse cycle with a non-greenhouse-compatible crop is rejected."""
+    fallow_gh = CropCycle(
+        growing_area_id=greenhouse.id,
+        crop_id=None,
+        planned_crop_id=corn.id,
+        season_year=2026,
+        cycle_number=10,
+        planted_at=date(2026, 5, 1),
+        yield_unit=YieldUnit.bushels,
+        status=CropCycleStatus.fallow,
+    )
+    db.add(fallow_gh)
+    await db.flush()
+
+    response = await client.patch(
+        f"/api/v1/crops/cycles/{fallow_gh.id}",
+        headers=auth_headers(owner_token),
+        json={"status": "active"},
+    )
+    assert response.status_code == 422
+    assert "greenhouse" in response.json()["detail"].lower()
