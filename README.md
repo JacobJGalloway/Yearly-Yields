@@ -2,6 +2,8 @@
   <img src="frontend/src/assets/brand/Logo Work Default Mode.png" alt="Yearly Yields" width="480"/>
 </p>
 
+<p align="center"><strong>v1.1</strong></p>
+
 An agricultural monitoring and yield prediction system built for Mid-West farmers. Ingests IoT sensor readings from open fields and greenhouses, detects anomalies against rolling historical data using a ReAct agentic loop powered by Claude, fires email alerts, and supports yield planning and invoice tracking across crop cycles.
 
 ## What it does
@@ -162,22 +164,6 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 
 ## Future Features
 
-### v1.1
-- **NOAA CDO historical backfill (trigger)** — `nws_service.backfill()` is fully implemented but has no automatic trigger. Requires a free `NOAA_CDO_TOKEN` from [ncei.noaa.gov/cdo-web/token](https://www.ncei.noaa.gov/cdo-web/token) added to `.env`, plus a scheduler or one-time admin endpoint to invoke it per station. MVP gap is covered by synthetic sensor data (`seed_sensor_backfill.py`) — real CDO history is not loaded until this is wired up.
-- **Local MCP server** — Expose the Yearly Yields database as MCP tools (`get_crop_ranges`, `get_phase_context`, `get_recent_readings`, `get_active_alert`) so the anomaly check and dashboard chat agents fetch data on demand rather than receiving full context in every API payload. Reduces token cost as fIoT reading volume grows.
-- **Prompt caching** — Add `cache_control` to stable system prompt sections in `agent/loop.py` and `agent/chat.py` using the Anthropic SDK's native caching support. Independent of MCP — quick win that can land first.
-- **Chat session memory** — Persist dashboard chat history between sessions via MCP file-based memory rather than re-sending the full sliding-window message history on each request.
-- **Dashboard spinner race (bug fix)** — On initial load, the navigation redirect occasionally cancels the HTTP chain before data arrives; a click on any nav item or the chat input clears it. Fix requires a route-stable guard or defer-until-stable initialization pattern.
-- **Material chips palette** — Swap the Material 3 tertiary palette from `mat.$azure-palette` to `mat.$amber-palette` so chips, FABs, and secondary action components render in Harvest Gold, completing the brand token system.
-- **Data gap approval modal** — When the NWS backfill detects a gap larger than 7 days, surface a modal asking the farmer to approve or reject a historical fill. Currently the system fills silently up to 7 days and logs a warning beyond that.
-- **Year-end weekly yield summary purge** — Aggregate `weekly_sensor_summaries` older than one year into annual summaries, then delete the weekly source rows. Completes the data retention pipeline (nightly purge → quarterly summarization → annual roll-up).
-- **GrowingArea unique name constraint** — Enforce unique names per owner at the database and API layer (unique index + 422 on conflict). Currently handled by name-match deduplication in `seed_demo_farms.py`.
-- **Coordinate input format** — Add Field currently requires decimal lat/long. Add support for degrees, minutes, and seconds (DMS) input with auto-conversion, as most farm GPS equipment outputs DMS format.
-- **Backfill anomaly averaging** — When the NWS polling service catches up after downtime, average the backfilled observations over the gap window and run anomaly detection on the result. A confirmed anomaly in the average is a stronger signal than any single reading.
-- **Yield plan manual entry (workaround)** — The "Generate Plan" UI button is hidden pending the v1.2 wizard. Until then, yield plans are entered directly via the API or database. The table view remains visible so existing plans are accessible.
-- **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
-- **Forgot password / password reset flow** — New users are currently assigned an initial password at creation. Add a forgot password flow (email link → reset form) on the login page. The same flow covers forced resets for expired or temporary passwords.
-
 ### v1.2
 - **`GrowingAreaPlot` sub-area model** *(schema-breaking — prerequisite for several items below)* — Introduces a `GrowingAreaPlot` layer between `GrowingArea` and `CropCycle`, enabling greenhouse row management and open-field trial plots. Greenhouse rows run staggered crop cycles (e.g., GH1 rows 1/2/3 harvested on different weekday pairs); open fields get `plot_id = 0` transparently. NWS readings stay at the area level; crop cycles, alerts, and sensor readings move to the plot level. All agent tools become plot-aware.
 - **AI-guided yield plan wizard** — Replace the static "Generate Yield Plan" form with a conversational wizard. The agent asks the farmer a structured set of questions (growing area, current phase, historical yield, market demand) and synthesizes the answers into a recommended target yield with reasoning. The final decision stays with the owner or farmer. Requires growing area selection support, which is absent from the current form.
@@ -186,4 +172,5 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 - **Configurable crop phase day admin UI** — Seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
 - **IoT reading source** — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
 - **SMS alert notifications** — Send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing SendGrid email fan-out.
+- **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
 
