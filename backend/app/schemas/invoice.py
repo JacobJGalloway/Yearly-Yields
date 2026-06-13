@@ -28,25 +28,46 @@ class CropRateRead(BaseModel):
 
 
 class InvoiceUpdate(BaseModel):
+    customer_id: Optional[uuid.UUID] = None
     quantity: Optional[float] = None
     notes: Optional[str] = None
-    status: Optional[InvoiceStatus] = None
 
 
 class InvoiceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    customer_id: uuid.UUID
     crop_cycle_id: uuid.UUID
-    rate_id: uuid.UUID
+    crop_rate_id: Optional[uuid.UUID]
+    customer_id: Optional[uuid.UUID]
+    invoice_type: str
+    status: InvoiceStatus
+    description: Optional[str]
     quantity: float
     unit: YieldUnit
-    unit_price: float
-    total_amount: float
-    status: InvoiceStatus
+    unit_price: Optional[float]
+    total_amount: Optional[float]
     invoice_date: date
     due_date: Optional[date]
     notes: Optional[str]
+    sent_at: Optional[datetime]
+    paid_at: Optional[datetime]
+    voided_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+
+class InvoiceConfigUpdate(BaseModel):
+    harvest_customer_id: Optional[uuid.UUID] = None
+    transplant_customer_id: Optional[uuid.UUID] = None
+
+
+class InvoiceConfigRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    growing_area_id: uuid.UUID
+    harvest_customer_id: Optional[uuid.UUID]
+    transplant_customer_id: Optional[uuid.UUID]
     created_at: datetime
     updated_at: datetime

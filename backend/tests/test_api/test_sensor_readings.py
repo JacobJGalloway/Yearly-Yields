@@ -16,14 +16,14 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.sensor_reading import AssessmentStatus
 from app.models.user import User
 from tests.conftest import auth_headers
 
 
 @pytest.fixture
-def reading_payload(growing_area: GrowingArea) -> dict:
+def reading_payload(growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot) -> dict:
     return {
         "growing_area_id": str(growing_area.id),
         "temperature": 72.5,
@@ -49,6 +49,21 @@ async def growing_area(db: AsyncSession, owner_user: User) -> GrowingArea:
     db.add(area)
     await db.flush()
     return area
+
+
+@pytest_asyncio.fixture
+async def growing_area_plot(db: AsyncSession, growing_area: GrowingArea) -> GrowingAreaPlot:
+    """Sentinel plot (plot_index=0) so resolve_plot_id() succeeds when readings are POSTed."""
+    p = GrowingAreaPlot(
+        growing_area_id=growing_area.id,
+        owner_id=growing_area.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
 
 
 @pytest.mark.asyncio
@@ -228,6 +243,7 @@ async def test_list_readings_filter_by_since(
     client: AsyncClient,
     owner_token: str,
     growing_area: GrowingArea,
+    growing_area_plot: GrowingAreaPlot,
 ):
     """?since= excludes readings before the cutoff."""
     import uuid as uuidlib
@@ -259,6 +275,7 @@ async def test_list_readings_filter_by_crop_cycle_id(
     client: AsyncClient,
     owner_token: str,
     growing_area: GrowingArea,
+    growing_area_plot: GrowingAreaPlot,
     db: AsyncSession,
 ):
     """?crop_cycle_id= returns only readings for that cycle."""
@@ -272,6 +289,7 @@ async def test_list_readings_filter_by_crop_cycle_id(
     await db.flush()
     cycle = CropCycle(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         crop_id=crop.id,
         season_year=2026,
         cycle_number=77,

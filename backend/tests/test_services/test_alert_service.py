@@ -16,7 +16,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert, AlertStatus, AlertType
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.sensor_reading import AssessmentStatus, ReadingSource, SensorReading
 from app.models.user import User
 from app.services.alert_service import (
@@ -45,9 +45,24 @@ async def growing_area(db: AsyncSession, owner_user: User) -> GrowingArea:
 
 
 @pytest_asyncio.fixture
-async def sensor_reading(db: AsyncSession, growing_area: GrowingArea) -> SensorReading:
+async def plot(db: AsyncSession, growing_area: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=growing_area.id,
+        owner_id=growing_area.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
+async def sensor_reading(db: AsyncSession, growing_area: GrowingArea, plot: GrowingAreaPlot) -> SensorReading:
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=plot.id,
         temperature=95.0,
         humidity=20.0,
         reading_source=ReadingSource.manual,

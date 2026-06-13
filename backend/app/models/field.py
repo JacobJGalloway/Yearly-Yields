@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum as SAEnum, Float, ForeignKey, String, Text
+from sqlalchemy import ARRAY, Boolean, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, new_uuid
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.models.alert import Alert
     from app.models.yield_plan import YieldPlan
     from app.models.weekly_sensor_summary import WeeklySensorSummary
+    from app.models.invoice_config import InvoiceConfig
 
 
 class PlotType(str, Enum):
@@ -95,6 +96,9 @@ class GrowingArea(Base, TimestampMixin):
     plots: Mapped[List["GrowingAreaPlot"]] = relationship(
         "GrowingAreaPlot", back_populates="growing_area", lazy="select"
     )
+    invoice_config: Mapped[Optional["InvoiceConfig"]] = relationship(
+        "InvoiceConfig", back_populates="growing_area", uselist=False, lazy="select"
+    )
 
 
 class GrowingAreaPlot(Base, TimestampMixin):
@@ -118,10 +122,12 @@ class GrowingAreaPlot(Base, TimestampMixin):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String(25), nullable=False)
+    plot_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     plot_type: Mapped[PlotType] = mapped_column(
         SAEnum(PlotType, name="plottype"), nullable=False
     )
+    harvest_weekdays: Mapped[Optional[List[int]]] = mapped_column(ARRAY(Integer), nullable=True)
     length_ft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     width_ft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     area_sqft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -134,4 +140,10 @@ class GrowingAreaPlot(Base, TimestampMixin):
     )
     crop_cycles: Mapped[List["CropCycle"]] = relationship(
         "CropCycle", back_populates="growing_area_plot", lazy="select"
+    )
+    sensor_readings: Mapped[List["SensorReading"]] = relationship(
+        "SensorReading", back_populates="growing_area_plot", lazy="select"
+    )
+    alerts: Mapped[List["Alert"]] = relationship(
+        "Alert", back_populates="growing_area_plot", lazy="select"
     )

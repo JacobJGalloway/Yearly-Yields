@@ -3,9 +3,10 @@ Admin endpoints — seed data and system management.
 All endpoints restricted to owner role.
 
 Seed order (enforced by FK constraints):
-  1. customers  (no dependencies)
-  2. crops      (depends on customers for default_harvest/transplant_customer_id)
+  1. customers      (no dependencies)
+  2. crops          (depends on customers for default_harvest/transplant_customer_id)
   3. permissions + role_permissions (no dependencies)
+  4. invoice_configs (depends on customers + existing growing_areas)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,6 +18,8 @@ from app.db.session import get_db
 from app.dependencies import require_role
 from app.models.crop import Crop, YieldUnit
 from app.models.customer import Customer
+from app.models.field import GrowingArea, GrowingAreaType
+from app.models.invoice_config import InvoiceConfig
 from app.models.user import Permission, RolePermission, User, UserRole
 from app.schemas.user import UserCreate, UserRead
 
@@ -192,6 +195,28 @@ async def seed_data(
             if result.scalar_one_or_none() is None:
                 db.add(RolePermission(role=role, permission_id=perm_id))
                 seeded.append(f"role_permission:{role.value}:{perm_name}")
+
+    # 5. InvoiceConfig — one per growing area, defaults by area type
+    areas_result = await db.execute(select(GrowingArea))
+    areas = areas_result.scalars().all()
+    for area in areas:
+        existing = await db.execute(
+            select(InvoiceConfig).where(InvoiceConfig.growing_area_id == area.id)
+        )
+        if existing.scalar_one_or_none() is None:
+            if area.area_type == GrowingAreaType.open_field:
+                harvest_cid = customer_map.get("Global Harvest")
+                transplant_cid = None
+            else:
+                harvest_cid = customer_map.get("National Nourish")
+                transplant_cid = customer_map.get("Prairie Start Nursery")
+
+            db.add(InvoiceConfig(
+                growing_area_id=area.id,
+                harvest_customer_id=harvest_cid,
+                transplant_customer_id=transplant_cid,
+            ))
+            seeded.append(f"invoice_config:{area.name}")
 
     await db.commit()
     return {"seeded": seeded, "message": "Seed complete" if seeded else "Nothing to seed — already up to date"}

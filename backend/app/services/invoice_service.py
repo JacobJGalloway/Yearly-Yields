@@ -2,15 +2,16 @@
 Invoice service — owns invoice creation and lifecycle.
 
 Responsibilities:
-  1. Auto-generate a draft invoice when a CropCycle is marked harvested.
-  2. Snapshot the active CropRate at creation time for audit immutability.
-  3. Manage invoice status transitions (draft → sent → paid / voided).
+  1. Auto-generate a draft invoice when a CropCycle is marked harvested/transplanted.
+  2. Look up InvoiceConfig by growing_area_id for the default customer assignment.
+  3. Snapshot the active CropRate at creation time for audit immutability.
+  4. Manage invoice status transitions with timestamp tracking.
 
 Rules:
   - Only farmer and owner roles may create invoices (enforced at endpoint layer).
-  - unit_price and unit are copied from the active CropRate — never recalculated.
-  - total_amount = quantity × unit_price (stored for query performance).
-  - Transplant invoicing (default_transplant_customer) is a deferred feature.
+  - unit_price and unit are snapshotted from the active CropRate — never recalculated after creation.
+  - total_amount = quantity × unit_price (stored for query performance; null if no rate at creation time).
+  - Customer is resolved from InvoiceConfig per growing area, not from Crop.default_*_customer_id.
 """
 
 import uuid
@@ -20,8 +21,10 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.crop import CropCycle
+from app.models.crop import Crop, CropCycle
+from app.models.field import GrowingArea
 from app.models.invoice import CropRate, Invoice, InvoiceStatus
+from app.models.invoice_config import InvoiceConfig
 
 VALID_INVOICE_TRANSITIONS: dict[InvoiceStatus, set[InvoiceStatus]] = {
     InvoiceStatus.draft: {InvoiceStatus.sent, InvoiceStatus.voided},
@@ -66,7 +69,6 @@ async def set_crop_rate(
     Create a new active CropRate and deactivate the previous one.
     Rates are immutable once created — this inserts a new record.
     """
-    # Deactivate current active rate if one exists
     result = await db.execute(
         select(CropRate).where(
             CropRate.crop_id == crop_id,
@@ -90,56 +92,68 @@ async def set_crop_rate(
     return new_rate
 
 
-async def create_draft_invoice(
+async def generate_draft(
     crop_cycle_id: uuid.UUID,
     db: AsyncSession,
-    use_transplant_customer: bool = False,
+    invoice_type: str = "harvest",
 ) -> Optional[Invoice]:
     """
-    Auto-generate a draft invoice when a CropCycle is marked harvested or transplanted.
+    Auto-generate a draft invoice when a CropCycle transitions to harvested or transplanted.
 
-    use_transplant_customer=True routes the invoice to default_transplant_customer_id
-    (e.g. Prairie Start Nursery) instead of default_harvest_customer_id.
+    Customer is resolved from InvoiceConfig for the cycle's growing_area — not from
+    Crop.default_*_customer_id. If no InvoiceConfig exists or no customer is configured,
+    the invoice is created with customer_id=None (owner assigns manually before sending).
 
-    Returns None if:
-      - The crop cycle has no actual_yield recorded.
-      - The crop has no active CropRate.
-      - The crop has no matching default customer for the invoice type.
+    If no active CropRate exists for the crop, unit_price and total_amount are null
+    (owner fills in pricing before sending).
+
+    Returns None only if the cycle has no actual_yield or no crop assigned.
     """
-    cycle_result = await db.execute(
-        select(CropCycle).where(CropCycle.id == crop_cycle_id)
-    )
+    cycle_result = await db.execute(select(CropCycle).where(CropCycle.id == crop_cycle_id))
     cycle = cycle_result.scalar_one_or_none()
     if cycle is None or cycle.actual_yield is None or cycle.crop_id is None:
         return None
 
-    from app.models.crop import Crop
+    # Resolve customer from InvoiceConfig for this growing area
+    config_result = await db.execute(
+        select(InvoiceConfig).where(InvoiceConfig.growing_area_id == cycle.growing_area_id)
+    )
+    config = config_result.scalar_one_or_none()
+    customer_id = None
+    if config:
+        customer_id = (
+            config.transplant_customer_id
+            if invoice_type == "transplant"
+            else config.harvest_customer_id
+        )
+
+    # Build description from crop + growing area names
     crop_result = await db.execute(select(Crop).where(Crop.id == cycle.crop_id))
     crop = crop_result.scalar_one_or_none()
 
-    customer_id = (
-        crop.default_transplant_customer_id if use_transplant_customer
-        else crop.default_harvest_customer_id
-    )
-    if crop is None or customer_id is None:
-        return None
+    area_result = await db.execute(select(GrowingArea).where(GrowingArea.id == cycle.growing_area_id))
+    area = area_result.scalar_one_or_none()
 
-    # Snapshot the active rate at harvest time
+    crop_name = crop.name if crop else "Unknown crop"
+    area_name = area.name if area else "Unknown area"
+    description = f"{crop_name} — {area_name} {invoice_type}"
+
+    # Snapshot active CropRate (nullable — no rate = no pricing at draft time)
     rate = await get_active_crop_rate(cycle.crop_id, db)
-    if rate is None:
-        return None
-
-    total_amount = round(cycle.actual_yield * rate.rate_per_unit, 2)
+    unit_price = rate.rate_per_unit if rate else None
+    total_amount = round(cycle.actual_yield * rate.rate_per_unit, 2) if rate else None
 
     invoice = Invoice(
-        customer_id=customer_id,
         crop_cycle_id=crop_cycle_id,
-        rate_id=rate.id,
+        crop_rate_id=rate.id if rate else None,
+        customer_id=customer_id,
+        invoice_type=invoice_type,
+        status=InvoiceStatus.draft,
+        description=description,
         quantity=cycle.actual_yield,
         unit=cycle.yield_unit,
-        unit_price=rate.rate_per_unit,
+        unit_price=unit_price,
         total_amount=total_amount,
-        status=InvoiceStatus.draft,
         invoice_date=date.today(),
     )
     db.add(invoice)
@@ -148,32 +162,62 @@ async def create_draft_invoice(
     return invoice
 
 
+async def send_invoice(invoice: Invoice, db: AsyncSession) -> Invoice:
+    """Transition draft → sent and record sent_at timestamp."""
+    validate_invoice_transition(invoice.status, InvoiceStatus.sent)
+    invoice.status = InvoiceStatus.sent
+    invoice.sent_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(invoice)
+    return invoice
+
+
+async def pay_invoice(invoice: Invoice, db: AsyncSession) -> Invoice:
+    """Transition sent → paid and record paid_at timestamp."""
+    validate_invoice_transition(invoice.status, InvoiceStatus.paid)
+    invoice.status = InvoiceStatus.paid
+    invoice.paid_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(invoice)
+    return invoice
+
+
+async def void_invoice(invoice: Invoice, db: AsyncSession) -> Invoice:
+    """Transition draft/sent → voided and record voided_at timestamp."""
+    validate_invoice_transition(invoice.status, InvoiceStatus.voided)
+    invoice.status = InvoiceStatus.voided
+    invoice.voided_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(invoice)
+    return invoice
+
+
 async def update_invoice(
     invoice_id: uuid.UUID,
     db: AsyncSession,
+    customer_id: Optional[uuid.UUID] = None,
     quantity: Optional[float] = None,
     notes: Optional[str] = None,
-    status: Optional[InvoiceStatus] = None,
 ) -> Optional[Invoice]:
     """
-    Update a draft invoice. Farmers can adjust quantity and notes before sending.
-    Recalculates total_amount if quantity changes.
+    Update a draft invoice. Farmers can reassign the customer, adjust quantity, and edit notes.
+    Recalculates total_amount if quantity changes and unit_price is set.
     """
     result = await db.execute(select(Invoice).where(Invoice.id == invoice_id))
     invoice = result.scalar_one_or_none()
     if invoice is None:
         return None
 
+    if customer_id is not None:
+        invoice.customer_id = customer_id
+
     if quantity is not None:
         invoice.quantity = quantity
-        invoice.total_amount = round(quantity * invoice.unit_price, 2)
+        if invoice.unit_price is not None:
+            invoice.total_amount = round(quantity * invoice.unit_price, 2)
 
     if notes is not None:
         invoice.notes = notes
-
-    if status is not None:
-        validate_invoice_transition(invoice.status, status)
-        invoice.status = status
 
     await db.commit()
     await db.refresh(invoice)

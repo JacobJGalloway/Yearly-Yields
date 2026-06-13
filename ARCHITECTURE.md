@@ -85,16 +85,24 @@ CREATE TABLE invoice_configs (
 
 #### `Invoice` (new table)
 
+Line items are backed by the existing `CropRate` model (`app/models/invoice.py`), not freeform JSONB. `CropRate` holds immutable, versioned per-crop rates (`crop_id`, `rate_per_unit`, `unit` as `YieldUnit` enum, `is_active`, `effective_date`) — only one `CropRate` per crop has `is_active=True` at a time, and old rates are retained for historical accuracy.
+
+The `Invoice` model **snapshots** `unit_price` and `unit` from the active `CropRate` at creation time. This means later rate changes never retroactively affect an existing invoice — the snapshot is the source of truth for that invoice going forward.
+
 ```sql
 CREATE TABLE invoices (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     crop_cycle_id   UUID NOT NULL REFERENCES crop_cycles(id),
+    crop_rate_id    UUID REFERENCES crop_rates(id),  -- the CropRate active at creation time, for traceability
     customer_id     UUID REFERENCES customers(id),
     invoice_type    VARCHAR(20) NOT NULL CHECK (invoice_type IN ('harvest', 'transplant')),
     status          VARCHAR(20) NOT NULL DEFAULT 'draft'
                         CHECK (status IN ('draft', 'sent', 'paid', 'voided')),
-    line_items      JSONB NOT NULL DEFAULT '[]',
-    total_amount    NUMERIC(12, 2),
+    description     TEXT NOT NULL,         -- e.g. "Tennessee Britches Tomato — GH1 Bay A harvest"
+    quantity        NUMERIC(12, 2) NOT NULL,
+    unit            VARCHAR(20) NOT NULL,   -- snapshotted from CropRate.unit (YieldUnit enum) at creation time
+    unit_price      NUMERIC(12, 4),         -- snapshotted from CropRate.rate_per_unit; nullable if no active CropRate exists
+    total_amount    NUMERIC(12, 2),         -- computed: quantity * unit_price, null if unit_price is null
     notes           TEXT,
     sent_at         TIMESTAMPTZ,
     paid_at         TIMESTAMPTZ,
@@ -106,21 +114,16 @@ CREATE TABLE invoices (
 CREATE INDEX idx_invoices_crop_cycle ON invoices(crop_cycle_id);
 CREATE INDEX idx_invoices_status ON invoices(status);
 CREATE INDEX idx_invoices_customer ON invoices(customer_id);
+CREATE INDEX idx_invoices_crop_rate ON invoices(crop_rate_id);
 ```
 
-**`line_items` JSONB shape (per item):**
+**Snapshot behavior at creation:**
 
-```json
-{
-  "description": "Tennessee Britches Tomato — GH1 Bay A harvest",
-  "quantity": 142.5,
-  "unit": "lbs",
-  "unit_price": null,
-  "amount": null
-}
-```
+- Look up the `CropRate` where `crop_id = crop_cycle.crop_id AND is_active = true`.
+- If found: set `crop_rate_id`, `unit_price = crop_rate.rate_per_unit`, `unit = crop_rate.unit`, and compute `total_amount = quantity * unit_price`.
+- If not found (no active rate configured for this crop): leave `crop_rate_id`, `unit_price`, and `total_amount` null, and set `unit` from the crop cycle's yield unit as a fallback so the draft is still readable. The invoice is created in draft status regardless — owner fills in pricing manually before sending.
 
-Unit price and amount are nullable at draft time — owner fills in before sending.
+**Single line item per invoice for v1.2.** The existing `CropRate`-backed model is 1:1 (one crop, one rate, one quantity) per invoice, matching one `CropCycle` harvest event. Multi-line invoices (e.g. combining multiple crop cycles into one customer invoice) are out of scope for v1.2 — each harvest produces its own invoice.
 
 ### 2.2 Status Machine
 
@@ -157,14 +160,23 @@ async def generate_draft(crop_cycle: CropCycle, db: AsyncSession) -> Invoice:
         else config.harvest_customer_id
     ) if config else None
 
-    line_items = build_line_items(crop_cycle)  # derives from crop type + yield data
+    # Snapshot the active CropRate for this crop, if one exists
+    active_rate = await get_active_crop_rate(crop_cycle.crop_id, db)
+
+    quantity = crop_cycle.yield_amount  # actual harvested quantity
+    description = build_description(crop_cycle)  # e.g. "Tennessee Britches Tomato — GH1 Bay A harvest"
 
     invoice = Invoice(
         crop_cycle_id=crop_cycle.id,
+        crop_rate_id=active_rate.id if active_rate else None,
         customer_id=customer_id,
         invoice_type=invoice_type,
         status="draft",
-        line_items=line_items,
+        description=description,
+        quantity=quantity,
+        unit=active_rate.unit if active_rate else crop_cycle.yield_unit,
+        unit_price=active_rate.rate_per_unit if active_rate else None,
+        total_amount=(quantity * active_rate.rate_per_unit) if active_rate else None,
     )
     db.add(invoice)
     await db.commit()
@@ -187,9 +199,11 @@ PDF is generated on-demand from the invoice record — no stored PDF file.
 
 - Farm name, growing area, crop cycle date range
 - Customer name and address (from `customers` record)
-- Line items table (description, quantity, unit, unit price, total)
+- Line item (description, quantity, unit, unit price, total — single row per v1.2 invoice)
 - Invoice status, sent date, notes
 - Yearly Yields branding (teal/cyan palette, consistent with Material 3 theme)
+
+If `unit_price` is null (no active `CropRate` was found at creation time), render the unit price and total cells as blank rather than `$0.00` or `null` — the PDF should look like an incomplete draft awaiting pricing, not a zero-value invoice.
 
 The Angular UI calls this endpoint and triggers a browser download — no iframe preview needed for demo-stable.
 
@@ -451,25 +465,35 @@ Each new endpoint and agent tool must include a test case for the unresolved (no
 
 ## 4. Shared Infrastructure Changes
 
-### pgvector Embedding Purge
+### Embedding Re-summarization (historical_summaries)
 
-Sensor readings deleted by the nightly purge job or rolled into weekly summaries leave orphaned embeddings in pgvector. Add a cleanup step to the existing background jobs:
+There is no separate `sensor_embeddings` table. Embeddings live as a `Vector(1536)` column directly on `historical_summaries` (`app/models/historical_summary.py`). Each `historical_summaries` row is a **many-to-one rollup**: one row represents an entire ISO week of aggregated `avg/min/max_temperature`, `avg/min/max_humidity`, and `reading_count` for a `(growing_area_id, crop_id, week_number, year)` combination. There is no FK from `historical_summaries` back to individual `sensor_readings` — by design, the source readings may already be purged by the time the weekly summary is computed (that's the point of the quarterly summarization job).
 
-**Nightly purge job addition:**
+Because the relationship is many-to-one and the source rows are expected to be gone, **the correct cleanup is not deletion** — deleting a `historical_summaries` row would destroy aggregated data that has no other representation. Instead:
+
+**Quarterly re-summarization job addition:**
 
 ```python
-async def purge_orphaned_embeddings(db: AsyncSession):
-    """Delete embeddings whose source sensor_reading no longer exists."""
-    await db.execute(text("""
-        DELETE FROM sensor_embeddings se
-        WHERE NOT EXISTS (
-            SELECT 1 FROM sensor_readings sr WHERE sr.id = se.reading_id
-        )
-    """))
+async def refresh_stale_embeddings(db: AsyncSession):
+    """
+    Null out embeddings on historical_summaries rows whose underlying
+    aggregates have been recalculated since the embedding was generated,
+    then re-run the summary/embed step for those rows.
+    """
+    stale = await db.execute(
+        select(HistoricalSummary)
+        .where(HistoricalSummary.updated_at > HistoricalSummary.embedding_generated_at)
+    )
+    for row in stale.scalars():
+        row.embedding = None
+        await db.flush()
+        new_embedding = await generate_summary_embedding(row)  # voyage-3 pipeline
+        row.embedding = new_embedding
+        row.embedding_generated_at = datetime.utcnow()
     await db.commit()
 ```
 
-Run after the existing hard-delete step. No new table — assumes embeddings table has a `reading_id` FK column (add if not present via migration).
+This requires an `embedding_generated_at` timestamp column on `historical_summaries` (added via migration below) to detect staleness. Run as part of the existing quarterly summarization job, after aggregates are recalculated.
 
 ### Alembic Migration Order
 
@@ -480,8 +504,8 @@ Migrations must run in this order for v1.2:
 3. `backfill_plot_id_all_tables` — inserts singleton `plot_index=0` rows for every `GrowingArea`, then backfills `plot_id` on **all three** tables: `crop_cycles`, `sensor_readings`, and `alerts`. Must not be scoped to open field only.
 4. `enforce_plot_id_not_null` — adds NOT NULL constraint after backfill
 5. `add_invoice_configs_table` — creates `InvoiceConfig`
-6. `add_invoices_table` — creates `Invoice`
-7. `add_reading_id_to_sensor_embeddings` — adds FK if not present (for purge job)
+6. `add_invoices_table` — creates `Invoice` (with `crop_rate_id`, snapshotted `unit_price`/`unit`/`total_amount` columns per section 2.1)
+7. `add_embedding_generated_at_to_historical_summaries` — adds staleness-tracking timestamp column, backfilled to `created_at` for existing rows
 
 Run all in sequence: `python -m alembic upgrade head`
 
@@ -508,12 +532,13 @@ Returns a summary of what was created (area name, crop, phase, `planted_at`) so 
 
 **Wipe scope — the following are deleted before rebuild (in dependency order):**
 
-1. `sensor_embeddings` (pgvector)
-2. `sensor_readings`
-3. `alerts`
-4. `invoices`
-5. `crop_cycles`
-6. `growing_area_plots` (non-singleton rows only — singleton `plot_index=0` rows are retained to preserve area structure)
+1. `sensor_readings`
+2. `alerts`
+3. `invoices`
+4. `crop_cycles`
+5. `growing_area_plots` (non-singleton rows only — singleton `plot_index=0` rows are retained to preserve area structure)
+
+`historical_summaries` is **not** wiped — see "Historical summaries" below for why and what the demo reset does instead.
 
 Farm, growing area, customer, user, and `InvoiceConfig` records are **not** touched.
 
@@ -542,27 +567,33 @@ Arugula (single-row, fast cycle) is placed in late growing phase so harvest read
 
 At least one greenhouse row must resolve to harvest phase — the endpoint must validate this after calculating offsets and raise `HTTP 500` with a descriptive error if the distribution logic produces no harvest row (indicates a phase constant change that broke the offset math).
 
-**pgvector index reset:**
+**Historical summaries — not wiped, but must remain consistent with the new `sensor_readings`:**
 
-Deleting rows from `sensor_embeddings` removes the source data but does not reset the pgvector index state. Stale index entries will cause dashboard charts and the agent similarity search to query against ghost embeddings, producing garbage results. The wipe step must therefore explicitly reset the index before the table delete:
+`historical_summaries` is a weekly rollup keyed by `(growing_area_id, crop_id, week_number, year)` with no FK to individual `sensor_readings`. Deleting these rows on every demo reset would destroy aggregate history with no way to regenerate the original raw readings behind older weeks — and isn't necessary, since the rollup's key (`growing_area_id`, `crop_id`, `week_number`, `year`) doesn't change just because `crop_cycles` and `sensor_readings` were rebuilt.
+
+However, the rebuilt `sensor_readings` use `planted_at` dates computed relative to *today*, which may produce a current-week aggregate that doesn't match whatever `historical_summaries` row (if any) already exists for `(growing_area_id, crop_id, current_week_number, current_year)`. To keep the dashboard charts and agent context consistent with the freshly-seeded data:
 
 ```python
-await db.execute(text("SELECT truncate_tsvector_cache()"))  # if applicable
-await db.execute(text("DROP INDEX IF EXISTS sensor_embeddings_embedding_idx"))
-await db.execute(text("DELETE FROM sensor_embeddings"))
-await db.execute(text("""
-    CREATE INDEX sensor_embeddings_embedding_idx
-    ON sensor_embeddings
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100)
-"""))
+async def refresh_current_week_summary(db: AsyncSession):
+    """
+    After rebuilding sensor_readings, recompute (or create) the
+    historical_summaries row for the current ISO week for every
+    (growing_area_id, crop_id) combination touched by the demo rebuild,
+    and regenerate its embedding.
+    """
+    current_year, current_week, _ = date.today().isocalendar()
+
+    for growing_area_id, crop_id in rebuilt_combinations:
+        summary = await get_or_create_summary(
+            db, growing_area_id, crop_id, current_week, current_year
+        )
+        await recompute_aggregates_from_readings(summary, db)  # avg/min/max temp & humidity, reading_count
+        summary.embedding = await generate_summary_embedding(summary)  # voyage-3 pipeline
+        summary.embedding_generated_at = datetime.utcnow()
+        await db.commit()
 ```
 
-This sequence — drop index, delete rows, recreate index — guarantees the index is clean before the backfill writes new embeddings into it. Claude Code must implement the wipe in this order, not as a simple `DELETE FROM sensor_embeddings`.
-
-**pgvector backfill:**
-
-After the index reset and crop cycle / sensor reading rebuild, run the embedding backfill inline before returning the response. The backfill uses the same voyage-3 embedding pipeline as the existing `seed_sensor_backfill.py` script. Sparse historical context is not acceptable for demo — the agent yield plan, anomaly reasoning, and dashboard charts all depend on populated embeddings to function correctly.
+This does not touch prior weeks' `historical_summaries` rows — only the current week, which is the only one affected by the demo rebuild. Sparse or stale current-week context is not acceptable for demo: the agent yield plan, anomaly reasoning, and dashboard charts all depend on this row being consistent with the rebuilt `sensor_readings`.
 
 ### Auth & Safety
 

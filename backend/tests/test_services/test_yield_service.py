@@ -14,7 +14,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.user import User
 from app.services.yield_service import generate_yield_plan
 
@@ -45,9 +45,24 @@ async def crop(db: AsyncSession) -> Crop:
 
 
 @pytest_asyncio.fixture
-async def active_cycle(db: AsyncSession, area: GrowingArea, crop: Crop) -> CropCycle:
+async def plot(db: AsyncSession, area: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=area.id,
+        owner_id=area.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
+async def active_cycle(db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, crop: Crop) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
         crop_id=crop.id,
         season_year=2026,
         cycle_number=1,
@@ -151,11 +166,12 @@ async def test_generate_yield_plan_multi_turn(
 
 
 async def test_generate_yield_plan_no_crop_id(
-    db: AsyncSession, area: GrowingArea, owner_user: User
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, owner_user: User
 ):
     """Cycle with no crop assigned still runs — crop name falls back to 'unknown'."""
     fallow = CropCycle(
         growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
         crop_id=None,
         season_year=2026,
         cycle_number=9,

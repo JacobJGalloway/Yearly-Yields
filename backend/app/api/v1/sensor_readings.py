@@ -13,6 +13,7 @@ from app.models.field import GrowingArea
 from app.models.sensor_reading import AssessmentStatus, SensorReading
 from app.models.user import User
 from app.schemas.sensor_reading import SensorReadingCreate, SensorReadingRead, WeeklySummaryRead
+from app.services.plot_service import resolve_plot_id
 
 router = APIRouter()
 
@@ -24,8 +25,10 @@ async def create_sensor_reading(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> SensorReadingRead:
+    plot_id = await resolve_plot_id(payload.growing_area_id, None, db)
     reading = SensorReading(
         growing_area_id=payload.growing_area_id,
+        growing_area_plot_id=plot_id,
         crop_cycle_id=payload.crop_cycle_id,
         temperature=payload.temperature,
         humidity=payload.humidity,

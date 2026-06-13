@@ -9,6 +9,7 @@ from app.api.v1 import (
     customers,
     data_gaps,
     fields,
+    invoice_configs,
     invoices,
     plots,
     sensor_readings,
@@ -28,6 +29,7 @@ router.include_router(sensor_readings.router, prefix="/readings", tags=["reading
 router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 router.include_router(yield_plans.router, prefix="/yield-plans", tags=["yield-plans"])
 router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
+router.include_router(invoice_configs.router, prefix="/invoice-configs", tags=["invoice-configs"])
 router.include_router(data_gaps.router, prefix="/data-gaps", tags=["data-gaps"])
 router.include_router(admin.router, prefix="/admin", tags=["admin"])
 router.include_router(chat.router, prefix="/agent/chat", tags=["agent"])

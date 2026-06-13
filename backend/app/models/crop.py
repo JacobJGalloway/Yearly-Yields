@@ -122,8 +122,8 @@ class CropCycle(Base, TimestampMixin):
     growing_area_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("growing_areas.id", ondelete="CASCADE"), nullable=False
     )
-    growing_area_plot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        ForeignKey("growing_area_plots.id", ondelete="SET NULL"), nullable=True
+    growing_area_plot_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("growing_area_plots.id", ondelete="RESTRICT"), nullable=False
     )
     crop_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("crops.id"), nullable=True
@@ -151,7 +151,7 @@ class CropCycle(Base, TimestampMixin):
     growing_area: Mapped["GrowingArea"] = relationship(
         "GrowingArea", back_populates="crop_cycles", lazy="select"
     )
-    growing_area_plot: Mapped[Optional["GrowingAreaPlot"]] = relationship(
+    growing_area_plot: Mapped["GrowingAreaPlot"] = relationship(
         "GrowingAreaPlot", back_populates="crop_cycles", lazy="select"
     )
     crop: Mapped[Optional["Crop"]] = relationship(

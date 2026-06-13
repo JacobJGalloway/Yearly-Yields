@@ -16,6 +16,27 @@ An agricultural monitoring and yield prediction system built for Mid-West farmer
 - Supports yield planning and fallow field recommendations based on sensor history
 - Full JWT authentication with role-based access control (owner, farmer, hired hand)
 
+## AI / RAG Architecture
+
+Anomaly detection and yield reasoning are powered by a Retrieval-Augmented Generation (RAG) pipeline built on `pgvector`, feeding a ReAct (Reason + Act) agentic loop running on Claude.
+
+**Retrieval layer**
+
+- Every sensor reading is embedded using voyage-3 and stored alongside structured aggregates in `historical_summaries` — weekly rollups of temperature, humidity, and reading counts per growing area and crop.
+- When a new reading arrives, the agent performs a similarity search against `historical_summaries` to retrieve the most relevant historical context for that growing area and crop — grounding the model's reasoning in actual seasonal patterns rather than generic thresholds.
+- Retrieval is scoped at the plot level (see `GrowingAreaPlot`, v1.2) so that conditions in one greenhouse row don't pollute the historical context for another.
+
+**Augmentation + reasoning loop**
+
+- The ReAct loop combines three context sources per decision: the new sensor reading, retrieved historical summaries (RAG), and live weather data from NWS CO-OP / api.weather.gov.
+- The agent reasons over this combined context to classify the reading as normal or anomalous, and decides whether to raise, update, or resolve an alert — all decisions are logged with the retrieved context that informed them.
+- The same retrieval pipeline backs yield planning: historical summaries for a growing area's crop history are retrieved and synthesized into yield predictions and fallow-field recommendations.
+
+**Lifecycle management**
+
+- A quarterly summarization job aggregates raw sensor readings into `historical_summaries` rows and generates their embeddings, keeping the vector store proportional to the number of growing-area/crop/week combinations rather than raw reading volume.
+- Embeddings are refreshed (not deleted) when underlying aggregates change, preserving long-term historical context for retrieval even after source readings are purged.
+
 ## Growing Areas / Crops (initial scope)
 
 | Type | Crop | Variety / Notes |

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.alert import Alert, AlertStatus, AlertType
+from app.models.sensor_reading import SensorReading
 
 
 async def get_active_alert(
@@ -50,8 +51,15 @@ async def create_alert(
     Caller is responsible for ensuring no active alert already exists
     for this growing area (call get_active_alert first).
     """
+    reading_result = await db.execute(
+        select(SensorReading).where(SensorReading.id == triggering_reading_id)
+    )
+    reading = reading_result.scalar_one_or_none()
+    plot_id = reading.growing_area_plot_id if reading else None
+
     alert = Alert(
         growing_area_id=growing_area_id,
+        growing_area_plot_id=plot_id,
         crop_cycle_id=crop_cycle_id,
         triggering_reading_id=triggering_reading_id,
         alert_type=alert_type,

@@ -21,7 +21,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.user import User
 from tests.conftest import auth_headers
 
@@ -59,6 +59,34 @@ async def greenhouse(db: AsyncSession, owner_user: User) -> GrowingArea:
 
 
 @pytest_asyncio.fixture
+async def open_field_plot(db: AsyncSession, open_field: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=open_field.id,
+        owner_id=open_field.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
+async def greenhouse_plot(db: AsyncSession, greenhouse: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=greenhouse.id,
+        owner_id=greenhouse.owner_id,
+        plot_index=0,
+        plot_type=PlotType.dwc_row,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
 async def corn(db: AsyncSession) -> Crop:
     crop = Crop(name="corn", greenhouse_compatible=False, typical_cycle_days=120)
     db.add(crop)
@@ -75,9 +103,12 @@ async def tomatoes(db: AsyncSession) -> Crop:
 
 
 @pytest_asyncio.fixture
-async def active_corn_cycle(db: AsyncSession, open_field: GrowingArea, corn: Crop) -> CropCycle:
+async def active_corn_cycle(
+    db: AsyncSession, open_field: GrowingArea, open_field_plot: GrowingAreaPlot, corn: Crop
+) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=open_field.id,
+        growing_area_plot_id=open_field_plot.id,
         crop_id=corn.id,
         season_year=2026,
         cycle_number=1,
@@ -91,9 +122,12 @@ async def active_corn_cycle(db: AsyncSession, open_field: GrowingArea, corn: Cro
 
 
 @pytest_asyncio.fixture
-async def active_tomato_cycle(db: AsyncSession, greenhouse: GrowingArea, tomatoes: Crop) -> CropCycle:
+async def active_tomato_cycle(
+    db: AsyncSession, greenhouse: GrowingArea, greenhouse_plot: GrowingAreaPlot, tomatoes: Crop
+) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=greenhouse.id,
+        growing_area_plot_id=greenhouse_plot.id,
         crop_id=tomatoes.id,
         season_year=2026,
         cycle_number=1,
@@ -107,9 +141,12 @@ async def active_tomato_cycle(db: AsyncSession, greenhouse: GrowingArea, tomatoe
 
 
 @pytest_asyncio.fixture
-async def fallow_cycle(db: AsyncSession, open_field: GrowingArea, corn: Crop) -> CropCycle:
+async def fallow_cycle(
+    db: AsyncSession, open_field: GrowingArea, open_field_plot: GrowingAreaPlot, corn: Crop
+) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=open_field.id,
+        growing_area_plot_id=open_field_plot.id,
         crop_id=None,
         planned_crop_id=corn.id,
         season_year=2026,
@@ -124,9 +161,12 @@ async def fallow_cycle(db: AsyncSession, open_field: GrowingArea, corn: Crop) ->
 
 
 @pytest_asyncio.fixture
-async def fallow_cycle_no_plan(db: AsyncSession, open_field: GrowingArea) -> CropCycle:
+async def fallow_cycle_no_plan(
+    db: AsyncSession, open_field: GrowingArea, open_field_plot: GrowingAreaPlot
+) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=open_field.id,
+        growing_area_plot_id=open_field_plot.id,
         crop_id=None,
         planned_crop_id=None,
         season_year=2026,
@@ -381,7 +421,7 @@ async def test_get_crop_cycle_not_found(client: AsyncClient, owner_token: str):
 
 @pytest.mark.asyncio
 async def test_create_crop_cycle_success(
-    client: AsyncClient, owner_token: str, open_field: GrowingArea, corn: Crop
+    client: AsyncClient, owner_token: str, open_field: GrowingArea, open_field_plot: GrowingAreaPlot, corn: Crop
 ):
     response = await client.post(
         "/api/v1/crops/cycles",
@@ -423,7 +463,7 @@ async def test_create_cycle_greenhouse_incompatible_crop_rejected(
 
 @pytest.mark.asyncio
 async def test_current_phase_seeding(
-    client: AsyncClient, owner_token: str, open_field: GrowingArea, corn: Crop
+    client: AsyncClient, owner_token: str, open_field: GrowingArea, open_field_plot: GrowingAreaPlot, corn: Crop
 ):
     from datetime import date, timedelta
     # corn seeding = 10 days; 5 days in → seeding
@@ -448,7 +488,7 @@ async def test_current_phase_seeding(
 
 @pytest.mark.asyncio
 async def test_current_phase_harvest(
-    client: AsyncClient, owner_token: str, open_field: GrowingArea, corn: Crop
+    client: AsyncClient, owner_token: str, open_field: GrowingArea, open_field_plot: GrowingAreaPlot, corn: Crop
 ):
     from datetime import date, timedelta
     # corn harvest threshold = day 142; 150 days in → harvest
@@ -575,11 +615,13 @@ async def test_fallow_to_active_greenhouse_incompatible_crop_rejected(
     owner_token: str,
     db: AsyncSession,
     greenhouse: GrowingArea,
+    greenhouse_plot: GrowingAreaPlot,
     corn: Crop,
 ):
     """Activating a fallow greenhouse cycle with a non-greenhouse-compatible crop is rejected."""
     fallow_gh = CropCycle(
         growing_area_id=greenhouse.id,
+        growing_area_plot_id=greenhouse_plot.id,
         crop_id=None,
         planned_crop_id=corn.id,
         season_year=2026,

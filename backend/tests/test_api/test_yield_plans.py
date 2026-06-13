@@ -22,7 +22,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.user import User
 from app.models.yield_plan import ConfidenceLevel, YieldPlan
 from tests.conftest import auth_headers
@@ -44,6 +44,20 @@ async def growing_area(db: AsyncSession, owner_user: User) -> GrowingArea:
 
 
 @pytest_asyncio.fixture
+async def plot(db: AsyncSession, growing_area: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=growing_area.id,
+        owner_id=growing_area.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
 async def crop(db: AsyncSession) -> Crop:
     c = Crop(
         name="corn",
@@ -56,9 +70,10 @@ async def crop(db: AsyncSession) -> Crop:
 
 
 @pytest_asyncio.fixture
-async def active_cycle(db: AsyncSession, growing_area: GrowingArea, crop: Crop) -> CropCycle:
+async def active_cycle(db: AsyncSession, growing_area: GrowingArea, plot: GrowingAreaPlot, crop: Crop) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=plot.id,
         crop_id=crop.id,
         season_year=2026,
         cycle_number=1,
@@ -72,9 +87,10 @@ async def active_cycle(db: AsyncSession, growing_area: GrowingArea, crop: Crop) 
 
 
 @pytest_asyncio.fixture
-async def harvested_cycle(db: AsyncSession, growing_area: GrowingArea, crop: Crop) -> CropCycle:
+async def harvested_cycle(db: AsyncSession, growing_area: GrowingArea, plot: GrowingAreaPlot, crop: Crop) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=plot.id,
         crop_id=crop.id,
         season_year=2025,
         cycle_number=1,
@@ -159,9 +175,11 @@ async def test_create_yield_plan_no_crop_assigned(
     owner_token: str,
     db: AsyncSession,
     growing_area: GrowingArea,
+    plot: GrowingAreaPlot,
 ):
     fallow = CropCycle(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=plot.id,
         crop_id=None,
         season_year=2026,
         cycle_number=2,
@@ -263,12 +281,14 @@ async def test_list_yield_plans_filtered_by_crop_cycle_id(
     active_cycle: CropCycle,
     db: AsyncSession,
     growing_area: GrowingArea,
+    plot: GrowingAreaPlot,
     crop: Crop,
 ):
     plan = await make_mock_plan(active_cycle, db)
 
     other_cycle = CropCycle(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=plot.id,
         crop_id=crop.id,
         season_year=2026,
         cycle_number=3,
@@ -314,10 +334,12 @@ async def test_create_yield_plan_active_cycle_no_crop(
     owner_token: str,
     db: AsyncSession,
     growing_area: GrowingArea,
+    plot: GrowingAreaPlot,
 ):
     """Active cycle with no crop_id assigned returns 422."""
     no_crop_cycle = CropCycle(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=plot.id,
         crop_id=None,
         season_year=2026,
         cycle_number=5,

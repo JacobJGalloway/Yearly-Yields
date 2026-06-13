@@ -1,8 +1,9 @@
 import uuid
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, Date, Enum as SAEnum, Float, ForeignKey, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, new_uuid
@@ -50,64 +51,67 @@ class CropRate(Base, CreatedAtMixin):
         "Crop", back_populates="rates", lazy="select"
     )
     invoices: Mapped[List["Invoice"]] = relationship(
-        "Invoice", back_populates="rate", lazy="select"
+        "Invoice", back_populates="crop_rate", lazy="select"
     )
 
 
 class Invoice(Base, TimestampMixin):
     """
-    A harvest invoice auto-generated when a CropCycle is marked harvested.
+    A harvest or transplant invoice auto-generated when a CropCycle transitions status.
 
-    unit_price and unit are copied from the active CropRate at creation time so
-    historical invoices remain accurate after rate changes.
+    unit_price and unit are snapshotted from the active CropRate at creation time so
+    historical invoices remain accurate after rate changes. Both are nullable — if no
+    active CropRate exists at harvest time, the invoice is created in draft status
+    without pricing and the owner fills it in before sending.
 
-    total_amount = quantity × unit_price (stored for query performance; recompute
-    is not needed but quantity × unit_price should always equal it).
+    total_amount = quantity × unit_price (stored for query performance).
+    customer_id is nullable — null means needs_customer_assignment (no InvoiceConfig
+    default was set for this growing area at harvest time).
 
-    Workflow:
-      1. CropCycle status → harvested, actual_yield set.
-      2. Service creates Invoice(status=draft) using crop's default_harvest_customer
-         and the currently active CropRate. quantity defaults to actual_yield.
-      3. Farmer (or owner) reviews draft, adjusts quantity if needed, then sends.
-
-    Only farmer and owner roles can create invoices (hired_hand cannot).
-    Transplant invoicing (using default_transplant_customer) is a deferred feature.
+    Status machine: draft → sent → paid
+                    draft → voided
+                    sent  → voided (owner only)
     """
 
     __tablename__ = "invoices"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
-    customer_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("customers.id"), nullable=False
-    )
     crop_cycle_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("crop_cycles.id"), nullable=False
     )
-    rate_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("crop_rates.id"), nullable=False
+    crop_rate_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("crop_rates.id"), nullable=True
     )
-    quantity: Mapped[float] = mapped_column(Float, nullable=False)
-    unit: Mapped[YieldUnit] = mapped_column(
-        SAEnum(YieldUnit, name="yieldunit"), nullable=False
+    customer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("customers.id"), nullable=True
     )
-    unit_price: Mapped[float] = mapped_column(Float, nullable=False)
-    total_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    invoice_type: Mapped[str] = mapped_column(String(20), nullable=False, default="harvest")
     status: Mapped[InvoiceStatus] = mapped_column(
         SAEnum(InvoiceStatus, name="invoicestatus"),
         nullable=False,
         default=InvoiceStatus.draft,
     )
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    quantity: Mapped[float] = mapped_column(Float, nullable=False)
+    unit: Mapped[YieldUnit] = mapped_column(
+        SAEnum(YieldUnit, name="yieldunit"), nullable=False
+    )
+    unit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     invoice_date: Mapped[Date] = mapped_column(Date, nullable=False)
     due_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    voided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    customer: Mapped["Customer"] = relationship(
-        "Customer", back_populates="invoices", lazy="select"
-    )
     crop_cycle: Mapped["CropCycle"] = relationship(
         "CropCycle", back_populates="invoices", lazy="select"
     )
-    rate: Mapped["CropRate"] = relationship(
+    crop_rate: Mapped[Optional["CropRate"]] = relationship(
         "CropRate", back_populates="invoices", lazy="select"
+    )
+    customer: Mapped[Optional["Customer"]] = relationship(
+        "Customer", back_populates="invoices", lazy="select"
     )

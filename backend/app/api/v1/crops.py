@@ -12,12 +12,17 @@ from app.models.field import GrowingArea, GrowingAreaType
 from app.models.user import User, UserRole
 from app.schemas.crop import CropCycleCreate, CropCycleRead, CropCycleUpdate, CropRead
 from app.services.crop_cycle_transitions import InvalidTransitionError, validate_transition
-from app.services.invoice_service import create_draft_invoice
+from app.services.invoice_service import generate_draft
+from app.services.plot_service import resolve_plot_id
 
 router = APIRouter()
 
 
-def _cycle_to_dict(cycle: CropCycle, crop_name: Optional[str]) -> dict:
+def _cycle_to_dict(
+    cycle: CropCycle,
+    crop_name: Optional[str],
+    invoice_id: Optional[uuid.UUID] = None,
+) -> dict:
     return {
         "id": cycle.id,
         "growing_area_id": cycle.growing_area_id,
@@ -35,6 +40,7 @@ def _cycle_to_dict(cycle: CropCycle, crop_name: Optional[str]) -> dict:
         "created_at": cycle.created_at,
         "updated_at": cycle.updated_at,
         "crop_name": crop_name,
+        "invoice_id": invoice_id,
     }
 
 
@@ -53,15 +59,15 @@ async def create_crop_cycle(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role(UserRole.farmer, UserRole.owner)),
 ) -> CropCycleRead:
+    area_result = await db.execute(
+        select(GrowingArea).where(GrowingArea.id == payload.growing_area_id)
+    )
+    area = area_result.scalar_one_or_none()
+    if area is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Growing area not found")
+
     crop = None
     if payload.crop_id is not None:
-        area_result = await db.execute(
-            select(GrowingArea).where(GrowingArea.id == payload.growing_area_id)
-        )
-        area = area_result.scalar_one_or_none()
-        if area is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Growing area not found")
-
         crop_result = await db.execute(select(Crop).where(Crop.id == payload.crop_id))
         crop = crop_result.scalar_one_or_none()
         if crop is None:
@@ -73,8 +79,11 @@ async def create_crop_cycle(
                 detail=f"{crop.name} is not compatible with dwc_greenhouse areas",
             )
 
+    plot_id = await resolve_plot_id(payload.growing_area_id, None, db)
+
     cycle = CropCycle(
         growing_area_id=payload.growing_area_id,
+        growing_area_plot_id=plot_id,
         crop_id=payload.crop_id,
         planned_crop_id=payload.planned_crop_id,
         season_year=payload.season_year,
@@ -203,15 +212,18 @@ async def update_crop_cycle(
     await db.commit()
     await db.refresh(cycle)
 
+    invoice_id = None
     if transitioning_to_harvested:
-        await create_draft_invoice(cycle.id, db)
+        invoice = await generate_draft(cycle.id, db, invoice_type="harvest")
+        invoice_id = invoice.id if invoice else None
 
     if transitioning_to_transplanted:
-        await create_draft_invoice(cycle.id, db, use_transplant_customer=True)
+        invoice = await generate_draft(cycle.id, db, invoice_type="transplant")
+        invoice_id = invoice.id if invoice else None
 
     crop_name = None
     if cycle.crop_id:
         r = await db.execute(select(Crop.name).where(Crop.id == cycle.crop_id))
         crop_name = r.scalar_one_or_none()
 
-    return CropCycleRead.model_validate(_cycle_to_dict(cycle, crop_name))
+    return CropCycleRead.model_validate(_cycle_to_dict(cycle, crop_name, invoice_id))

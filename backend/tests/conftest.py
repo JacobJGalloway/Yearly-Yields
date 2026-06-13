@@ -21,7 +21,7 @@ from app.core.security import create_access_token, hash_password
 from app.db.session import get_db
 from app.main import app
 from app.models.base import Base
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.user import User, UserRole
 
 TEST_DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/yearly_yields_test"
@@ -161,6 +161,21 @@ async def growing_area(db: AsyncSession, owner_user: User) -> GrowingArea:
     db.add(area)
     await db.flush()
     return area
+
+
+@pytest_asyncio.fixture
+async def growing_area_plot(db: AsyncSession, growing_area: GrowingArea) -> GrowingAreaPlot:
+    """Sentinel plot (plot_index=0) for the shared open_field growing_area."""
+    plot = GrowingAreaPlot(
+        growing_area_id=growing_area.id,
+        owner_id=growing_area.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(plot)
+    await db.flush()
+    return plot
 
 
 def auth_headers(token: str) -> dict:

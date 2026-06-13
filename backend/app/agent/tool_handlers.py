@@ -261,14 +261,22 @@ async def handle_create_alert(
     tool_input: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
+    triggering_reading_id = uuid.UUID(tool_input["triggering_reading_id"])
+    reading_result = await db.execute(
+        select(SensorReading).where(SensorReading.id == triggering_reading_id)
+    )
+    reading = reading_result.scalar_one_or_none()
+    plot_id = reading.growing_area_plot_id if reading else None
+
     alert = Alert(
         growing_area_id=uuid.UUID(tool_input["growing_area_id"]),
+        growing_area_plot_id=plot_id,
         crop_cycle_id=(
             uuid.UUID(tool_input["crop_cycle_id"])
             if tool_input.get("crop_cycle_id")
             else None
         ),
-        triggering_reading_id=uuid.UUID(tool_input["triggering_reading_id"]),
+        triggering_reading_id=triggering_reading_id,
         alert_type=AlertType(tool_input["alert_type"]),
         status=AlertStatus.active,
         consecutive_normal_count=0,

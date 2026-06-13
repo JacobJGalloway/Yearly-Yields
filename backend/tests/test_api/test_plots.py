@@ -32,6 +32,7 @@ async def plot(db: AsyncSession, greenhouse_area: GrowingArea, owner_user) -> Gr
     p = GrowingAreaPlot(
         growing_area_id=greenhouse_area.id,
         owner_id=owner_user.id,
+        plot_index=1,
         name="Bay A",
         plot_type=PlotType.dwc_row,
         area_sqft=500.0,
@@ -45,7 +46,7 @@ async def test_create_plot_success(client: AsyncClient, owner_token: str, greenh
     r = await client.post(
         f"/api/v1/fields/{greenhouse_area.id}/plots/",
         headers=auth_headers(owner_token),
-        json={"name": "Row 1", "plot_type": "dwc_row", "area_sqft": 250.0},
+        json={"plot_index": 1, "name": "Row 1", "plot_type": "dwc_row", "area_sqft": 250.0},
     )
     assert r.status_code == 201
     data = r.json()
@@ -57,7 +58,7 @@ async def test_create_plot_area_not_found(client: AsyncClient, owner_token: str)
     r = await client.post(
         f"/api/v1/fields/{uuid.uuid4()}/plots/",
         headers=auth_headers(owner_token),
-        json={"name": "Row 1", "plot_type": "dwc_row"},
+        json={"plot_index": 1, "name": "Row 1", "plot_type": "dwc_row"},
     )
     assert r.status_code == 404
 

@@ -40,11 +40,19 @@ async def create_plot(
 ) -> GrowingAreaPlotRead:
     await _get_area_or_404(area_id, current_user, db)
 
+    if payload.plot_index == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="plot_index 0 is reserved for the open-field sentinel and cannot be assigned manually.",
+        )
+
     plot = GrowingAreaPlot(
         growing_area_id=area_id,
         owner_id=current_user.id,
+        plot_index=payload.plot_index,
         name=payload.name,
         plot_type=payload.plot_type,
+        harvest_weekdays=payload.harvest_weekdays,
         length_ft=payload.length_ft,
         width_ft=payload.width_ft,
         area_sqft=payload.area_sqft,

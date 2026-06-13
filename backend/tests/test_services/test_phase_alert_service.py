@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.user import User
 from app.services.phase_alert_service import _check_all_cycles
 
@@ -40,6 +40,20 @@ async def area(db: AsyncSession, owner_user: User) -> GrowingArea:
 
 
 @pytest_asyncio.fixture
+async def plot(db: AsyncSession, area: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=area.id,
+        owner_id=area.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
 async def corn_crop(db: AsyncSession) -> Crop:
     # corn: seeding=10, growing=132 → harvest threshold at day 142
     crop = Crop(name="corn", greenhouse_compatible=False, typical_cycle_days=167)
@@ -49,11 +63,12 @@ async def corn_crop(db: AsyncSession) -> Crop:
 
 
 async def test_no_alert_created_for_harvest_phase_cycle(
-    db: AsyncSession, area: GrowingArea, corn_crop: Crop
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, corn_crop: Crop
 ):
     planted = date.today() - timedelta(days=150)
     cycle = CropCycle(
         growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
         crop_id=corn_crop.id,
         season_year=2026,
         cycle_number=1,
@@ -71,12 +86,13 @@ async def test_no_alert_created_for_harvest_phase_cycle(
 
 
 async def test_skips_cycle_not_in_harvest_phase(
-    db: AsyncSession, area: GrowingArea, corn_crop: Crop
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, corn_crop: Crop
 ):
     # 5 days in → seeding phase (threshold is day 142)
     planted = date.today() - timedelta(days=5)
     cycle = CropCycle(
         growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
         crop_id=corn_crop.id,
         season_year=2026,
         cycle_number=2,
@@ -94,11 +110,12 @@ async def test_skips_cycle_not_in_harvest_phase(
 
 
 async def test_skips_fallow_cycle(
-    db: AsyncSession, area: GrowingArea, corn_crop: Crop
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, corn_crop: Crop
 ):
     planted = date.today() - timedelta(days=150)
     cycle = CropCycle(
         growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
         crop_id=corn_crop.id,
         season_year=2026,
         cycle_number=3,
