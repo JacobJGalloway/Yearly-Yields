@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import ARRAY, Boolean, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, new_uuid
@@ -128,6 +128,7 @@ class GrowingAreaPlot(Base, TimestampMixin):
         SAEnum(PlotType, name="plottype"), nullable=False
     )
     harvest_weekdays: Mapped[Optional[List[int]]] = mapped_column(ARRAY(Integer), nullable=True)
+    last_harvest_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     length_ft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     width_ft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     area_sqft: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

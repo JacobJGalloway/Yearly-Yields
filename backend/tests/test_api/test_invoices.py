@@ -499,3 +499,39 @@ async def test_update_invoice_not_found_returns_404(
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 404
+
+
+# ── PDF endpoint ──────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_invoice_pdf_success(
+    client: AsyncClient, owner_token: str, draft_invoice: Invoice
+):
+    response = await client.get(
+        f"/api/v1/invoices/{draft_invoice.id}/pdf",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers["content-disposition"]
+    assert len(response.content) > 1000
+
+
+@pytest.mark.asyncio
+async def test_get_invoice_pdf_not_found(client: AsyncClient, owner_token: str):
+    response = await client.get(
+        f"/api/v1/invoices/{uuid.uuid4()}/pdf",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_hired_hand_cannot_get_pdf(
+    client: AsyncClient, hired_hand_token: str, draft_invoice: Invoice
+):
+    response = await client.get(
+        f"/api/v1/invoices/{draft_invoice.id}/pdf",
+        headers=auth_headers(hired_hand_token),
+    )
+    assert response.status_code == 403

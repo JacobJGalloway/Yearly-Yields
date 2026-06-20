@@ -103,9 +103,10 @@ cd backend
 docker compose up -d
 
 # 2. Apply database migrations (first time, or after pulling new migrations)
+# (still in backend/)
 python -m alembic upgrade head
 
-# 3. Start the backend
+# 3. Start the backend (still in backend/)
 python -m uvicorn app.main:app --reload
 # → http://127.0.0.1:8000  |  Swagger: http://127.0.0.1:8000/docs
 
@@ -122,7 +123,7 @@ cd backend
 python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=50
 ```
 
-- **Current coverage:** 338 tests, ~85% — all service and API layers covered. Remaining gaps are excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
+- **Current coverage:** 345 tests, ~84% — all service and API layers covered. Remaining gaps are excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
 
 ## First-time setup
 

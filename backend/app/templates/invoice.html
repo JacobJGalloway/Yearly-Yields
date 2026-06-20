@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: letter;
+    margin: 36px 40px;
+  }
+
+  body {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    color: #212121;
+  }
+
+  /* ── Header ── */
+  .header-table {
+    width: 100%;
+    border-bottom: 3px solid #00897B;
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+  }
+  .yy-logo       { height: 44px; }
+  .customer-logo { height: 40px; max-width: 180px; }
+
+  /* ── Title / meta row ── */
+  .title-table { width: 100%; margin-bottom: 20px; }
+  .invoice-title {
+    font-size: 26pt;
+    font-weight: bold;
+    color: #00897B;
+    letter-spacing: 3px;
+  }
+  .meta-label {
+    font-size: 8pt;
+    color: #78909C;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .meta-value {
+    font-size: 9.5pt;
+    font-weight: bold;
+    color: #37474F;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 8pt;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #FFFFFF;
+  }
+  .status-draft   { background-color: #78909C; }
+  .status-sent    { background-color: #00897B; }
+  .status-paid    { background-color: #2E7D32; }
+  .status-voided  { background-color: #C62828; }
+
+  /* ── Parties ── */
+  .parties-table {
+    width: 100%;
+    background-color: #ECEFF1;
+    margin-bottom: 22px;
+    padding: 14px 18px;
+  }
+  .party-label {
+    font-size: 7pt;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #00897B;
+    margin-bottom: 5px;
+  }
+  .party-name   { font-size: 11pt; font-weight: bold; color: #37474F; }
+  .party-detail { font-size: 9pt; color: #78909C; line-height: 1.5; }
+  .no-customer  { font-size: 9pt; color: #C62828; }
+
+  /* ── Line items ── */
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+  }
+  .items-table thead tr { background-color: #00897B; }
+  .items-table thead th {
+    padding: 9px 12px;
+    color: #FFFFFF;
+    font-size: 8pt;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: left;
+  }
+  .items-table thead th.r { text-align: right; }
+  .items-table tbody tr   { border-bottom: 1px solid #ECEFF1; }
+  .items-table tbody td   { padding: 11px 12px; font-size: 9.5pt; vertical-align: top; }
+  .items-table tbody td.r { text-align: right; }
+  .desc-main { font-weight: bold; color: #37474F; }
+  .desc-sub  { font-size: 8.5pt; color: #78909C; margin-top: 3px; }
+
+  /* ── Totals ── */
+  .totals-outer { width: 100%; margin-bottom: 24px; }
+  .totals-box {
+    width: 240px;
+    border-top: 2px solid #00897B;
+    padding-top: 8px;
+  }
+  .total-row-table { width: 240px; }
+  .total-label { font-size: 9.5pt; color: #37474F; }
+  .total-value { font-size: 9.5pt; color: #37474F; text-align: right; }
+  .grand-label { font-size: 11.5pt; font-weight: bold; color: #00897B; }
+  .grand-value { font-size: 11.5pt; font-weight: bold; color: #00897B; text-align: right; }
+  .total-divider { border-top: 1px solid #ECEFF1; padding-top: 6px; }
+
+  /* ── Notes ── */
+  .notes-section { margin-bottom: 24px; }
+  .notes-label {
+    font-size: 8pt;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #00897B;
+    margin-bottom: 5px;
+  }
+  .notes-body {
+    font-size: 9pt;
+    color: #37474F;
+    line-height: 1.65;
+    background-color: #E0F2F1;
+    padding: 10px 14px;
+    border-left: 3px solid #00897B;
+  }
+
+  /* ── Footer ── */
+  .footer-table {
+    width: 100%;
+    border-top: 1px solid #ECEFF1;
+    padding-top: 10px;
+    font-size: 8pt;
+    color: #78909C;
+  }
+  .footer-gold { color: #C9A227; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<table class="header-table" cellpadding="0" cellspacing="0">
+  <tr>
+    <td><img class="yy-logo" src="assets/brand/Logo Work Name One Line Light Mode.png" alt="Yearly Yields"></td>
+    <td align="right">
+      {% if customer_logo %}
+      <img class="customer-logo" src="{{ customer_logo }}" alt="{{ customer.name if customer else '' }}">
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+<!-- Title row -->
+<table class="title-table" cellpadding="0" cellspacing="0">
+  <tr>
+    <td valign="top"><div class="invoice-title">INVOICE</div></td>
+    <td valign="top" align="right">
+      {% if invoice_date_str %}
+      <div><span class="meta-label">Date&nbsp;&nbsp;</span><span class="meta-value">{{ invoice_date_str }}</span></div>
+      {% endif %}
+      {% if due_date_str %}
+      <div><span class="meta-label">Due&nbsp;&nbsp;</span><span class="meta-value">{{ due_date_str }}</span></div>
+      {% endif %}
+      <div><span class="meta-label">Invoice #&nbsp;&nbsp;</span><span class="meta-value">{{ short_id }}</span></div>
+      <div style="margin-top:6px;">
+        <span class="status-badge status-{{ invoice.status }}">{{ invoice.status }}</span>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- From / To -->
+<table class="parties-table" cellpadding="0" cellspacing="0">
+  <tr>
+    <td width="50%" valign="top">
+      <div class="party-label">From</div>
+      <div class="party-name">Yearly Yields</div>
+      {% if area_name %}
+      <div class="party-detail">{{ area_name }}</div>
+      {% endif %}
+    </td>
+    <td width="50%" valign="top">
+      <div class="party-label">Bill To</div>
+      {% if customer %}
+      <div class="party-name">{{ customer.name }}</div>
+      <div class="party-detail">
+        {{ customer.email }}
+        {% if customer.phone %}<br>{{ customer.phone }}{% endif %}
+      </div>
+      {% else %}
+      <div class="no-customer">No customer assigned</div>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+<!-- Line items -->
+<table class="items-table" cellpadding="0" cellspacing="0">
+  <thead>
+    <tr>
+      <th style="width:46%;">Description</th>
+      <th class="r" style="width:12%;">Qty</th>
+      <th style="width:11%;">Unit</th>
+      <th class="r" style="width:14%;">Unit Price</th>
+      <th class="r" style="width:17%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <div class="desc-main">
+          {{ invoice.description or (invoice.invoice_type | capitalize ~ ' — ' ~ (area_name or 'Growing Area')) }}
+        </div>
+        {% if crop_name %}
+        <div class="desc-sub">{{ crop_name }}</div>
+        {% endif %}
+      </td>
+      <td class="r">{{ '%.2f' % invoice.quantity }}</td>
+      <td>{{ invoice.unit }}</td>
+      <td class="r">
+        {% if has_pricing %}${{ '%.2f' % invoice.unit_price }}{% endif %}
+      </td>
+      <td class="r">
+        {% if has_pricing and invoice.total_amount is not none %}${{ '%.2f' % invoice.total_amount }}{% endif %}
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Totals (right-aligned via outer table) -->
+<table class="totals-outer" cellpadding="0" cellspacing="0">
+  <tr>
+    <td align="right">
+      <div class="totals-box">
+        <table class="total-row-table" cellpadding="2" cellspacing="0">
+          <tr>
+            <td class="total-label">Subtotal</td>
+            <td class="total-value">
+              {% if has_pricing and invoice.total_amount is not none %}
+                ${{ '%.2f' % invoice.total_amount }}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          <tr class="total-divider">
+            <td class="grand-label">Total Due</td>
+            <td class="grand-value">
+              {% if has_pricing and invoice.total_amount is not none %}
+                ${{ '%.2f' % invoice.total_amount }}
+              {% else %}Pending pricing{% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+    </td>
+  </tr>
+</table>
+
+{% if invoice.notes %}
+<!-- Notes -->
+<div class="notes-section">
+  <div class="notes-label">Notes</div>
+  <div class="notes-body">{{ invoice.notes }}</div>
+</div>
+{% endif %}
+
+<!-- Footer -->
+<table class="footer-table" cellpadding="0" cellspacing="0">
+  <tr>
+    <td>Generated by <span class="footer-gold">Yearly Yields</span>{% if year %} &middot; {{ year }}{% endif %}</td>
+    <td align="right">Invoice {{ short_id }}</td>
+  </tr>
+</table>
+
+</body>
+</html>

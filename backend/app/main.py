@@ -13,7 +13,8 @@ from app.config import settings
 from app.core.logging import configure_logging
 from app.core.security import create_access_token, create_refresh_token, decode_access_payload
 from app.db.session import AsyncSessionLocal, engine
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType
+from app.services.plot_service import resolve_plot_id
 from app.models.sensor_reading import AssessmentStatus, ReadingSource, SensorReading
 
 logger = logging.getLogger(__name__)
@@ -61,9 +62,12 @@ async def _run_nws_poll() -> None:
             reading_id = None
 
             async with AsyncSessionLocal() as db:
+                plot_id = await resolve_plot_id(area.id, None, db)
+
                 existing = await db.execute(
                     select(SensorReading.id).where(
                         SensorReading.growing_area_id == area.id,
+                        SensorReading.growing_area_plot_id == plot_id,
                         SensorReading.read_at == raw["observed_at"],
                     )
                 )
@@ -72,6 +76,7 @@ async def _run_nws_poll() -> None:
 
                 reading = SensorReading(
                     growing_area_id=area.id,
+                    growing_area_plot_id=plot_id,
                     temperature=raw.get("temp_f"),
                     humidity=raw.get("humidity"),
                     wind_speed=raw.get("wind_speed"),
@@ -129,29 +134,42 @@ async def _run_fiot_poll() -> None:
                 if latest_ts and (now - latest_ts) < cooldown:
                     continue
 
+                plots_result = await db.execute(
+                    select(GrowingAreaPlot).where(
+                        GrowingAreaPlot.growing_area_id == area.id,
+                        GrowingAreaPlot.is_active.is_(True),
+                    )
+                )
+                plots = plots_result.scalars().all()
+
+            if not plots:
+                continue
+
             raw = await nws_service.simulate_greenhouse_reading(area)
             if raw is None:
                 continue
 
-            reading_id = None
+            for plot in plots:
+                reading_id = None
 
-            async with AsyncSessionLocal() as db:
-                reading = SensorReading(
-                    growing_area_id=area.id,
-                    temperature=raw.get("temp_f"),
-                    humidity=raw.get("humidity"),
-                    reading_source=ReadingSource.fiot,
-                    read_at=now,
-                    received_at=now,
-                    assessment_status=AssessmentStatus.pending,
-                )
-                db.add(reading)
-                await db.commit()
-                await db.refresh(reading)
-                reading_id = reading.id
+                async with AsyncSessionLocal() as db:
+                    reading = SensorReading(
+                        growing_area_id=area.id,
+                        growing_area_plot_id=plot.id,
+                        temperature=raw.get("temp_f"),
+                        humidity=raw.get("humidity"),
+                        reading_source=ReadingSource.fiot,
+                        read_at=now,
+                        received_at=now,
+                        assessment_status=AssessmentStatus.pending,
+                    )
+                    db.add(reading)
+                    await db.commit()
+                    await db.refresh(reading)
+                    reading_id = reading.id
 
-            async with AsyncSessionLocal() as db:
-                await run_anomaly_check(reading_id, db)
+                async with AsyncSessionLocal() as db:
+                    await run_anomaly_check(reading_id, db)
 
         except Exception:
             logger.exception("fIoT poll failed for area %s (%s)", area.name, area.id)

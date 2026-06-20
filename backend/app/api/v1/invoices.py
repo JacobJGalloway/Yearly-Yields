@@ -1,7 +1,7 @@
 import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from app.services.invoice_service import (
     update_invoice,
     void_invoice,
 )
+from app.services.pdf_service import generate_invoice_pdf
 
 router = APIRouter()
 
@@ -117,3 +118,20 @@ async def void_invoice_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     return InvoiceRead.model_validate(invoice)
+
+
+@router.get("/{invoice_id}/pdf")
+async def get_invoice_pdf(
+    invoice_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.farmer, UserRole.owner)),
+) -> Response:
+    pdf_bytes = await generate_invoice_pdf(invoice_id, db)
+    if pdf_bytes is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+    filename = f"invoice-{str(invoice_id)[:8]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

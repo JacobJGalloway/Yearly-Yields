@@ -11,7 +11,8 @@ YIELD_PLAN_TOOLS = [
         "name": "get_sensor_history",
         "description": (
             "Retrieve recent sensor readings for a growing area to understand current season "
-            "temperature and humidity conditions. Returns up to 90 days of readings."
+            "temperature and humidity conditions. Returns up to 90 days of readings. "
+            "When growing_area_plot_id is provided, results are scoped to that plot only."
         ),
         "input_schema": {
             "type": "object",
@@ -19,6 +20,10 @@ YIELD_PLAN_TOOLS = [
                 "growing_area_id": {
                     "type": "string",
                     "description": "UUID of the growing area.",
+                },
+                "growing_area_plot_id": {
+                    "type": "string",
+                    "description": "UUID of the specific plot (row/bay). Omit to return all readings for the area.",
                 },
             },
             "required": ["growing_area_id"],
@@ -29,7 +34,8 @@ YIELD_PLAN_TOOLS = [
         "description": (
             "Retrieve historical harvested crop cycles for a growing area and crop, "
             "including actual vs target yield. Use this to understand past performance "
-            "and inform planting quantity recommendations."
+            "and inform planting quantity recommendations. "
+            "When growing_area_plot_id is provided, results are scoped to that plot only."
         ),
         "input_schema": {
             "type": "object",
@@ -41,6 +47,10 @@ YIELD_PLAN_TOOLS = [
                 "crop_id": {
                     "type": "string",
                     "description": "UUID of the crop.",
+                },
+                "growing_area_plot_id": {
+                    "type": "string",
+                    "description": "UUID of the specific plot (row/bay). Omit to return cycles across all plots in the area.",
                 },
             },
             "required": ["growing_area_id", "crop_id"],
@@ -81,6 +91,10 @@ YIELD_PLAN_TOOLS = [
                     "type": "string",
                     "description": "UUID of the growing area.",
                 },
+                "growing_area_plot_id": {
+                    "type": "string",
+                    "description": "UUID of the specific plot (row/bay) this plan is for. Use the value from the initial context.",
+                },
                 "recommended_plant_quantity": {
                     "type": "number",
                     "description": "Recommended number of seeds or transplants.",
@@ -102,6 +116,7 @@ YIELD_PLAN_TOOLS = [
             "required": [
                 "crop_cycle_id",
                 "growing_area_id",
+                "growing_area_plot_id",
                 "recommended_plant_quantity",
                 "target_yield",
                 "confidence_level",
@@ -141,6 +156,10 @@ ANOMALY_WRITE_TOOLS = [
                     "type": "number",
                     "description": "Current humidity reading as a percentage (0-100).",
                 },
+                "growing_area_plot_id": {
+                    "type": "string",
+                    "description": "UUID of the specific plot (row/bay). Use the value from the initial reading context.",
+                },
             },
             "required": ["growing_area_id", "crop_id", "temperature", "humidity"],
         },
@@ -175,6 +194,10 @@ ANOMALY_WRITE_TOOLS = [
                 "growing_area_id": {
                     "type": "string",
                     "description": "UUID of the growing area.",
+                },
+                "growing_area_plot_id": {
+                    "type": "string",
+                    "description": "UUID of the specific plot (row/bay). Use the value from the initial reading context.",
                 },
                 "crop_cycle_id": {
                     "type": "string",

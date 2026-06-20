@@ -47,6 +47,8 @@ async def generate_yield_plan(
     user_message = (
         f"Generate a yield plan for this crop cycle:\n"
         f"- Crop Cycle ID: {cycle.id}\n"
+        f"- Growing Area ID: {cycle.growing_area_id}\n"
+        f"- Growing Area Plot ID: {cycle.growing_area_plot_id}\n"
         f"- Crop: {crop.name if crop else 'unknown'}\n"
         f"- Growing Area: {area.name if area else 'unknown'} ({area.area_type.value if area else 'unknown'})\n"
         f"- Season Year: {cycle.season_year}, Cycle #{cycle.cycle_number}\n"

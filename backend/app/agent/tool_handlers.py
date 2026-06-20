@@ -53,12 +53,15 @@ async def handle_get_sensor_history(
     db: AsyncSession,
 ) -> dict[str, Any]:
     growing_area_id = uuid.UUID(tool_input["growing_area_id"])
-    result = await db.execute(
-        select(SensorReading)
-        .where(SensorReading.growing_area_id == growing_area_id)
-        .order_by(desc(SensorReading.read_at))
-        .limit(90)
-    )
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+
+    query = select(SensorReading).order_by(desc(SensorReading.read_at)).limit(90)
+    if raw_plot_id:
+        query = query.where(SensorReading.growing_area_plot_id == uuid.UUID(raw_plot_id))
+    else:
+        query = query.where(SensorReading.growing_area_id == growing_area_id)
+
+    result = await db.execute(query)
     readings = result.scalars().all()
     if not readings:
         return {"status": "no_data", "readings": []}
@@ -83,15 +86,22 @@ async def handle_get_cycle_yield_history(
 ) -> dict[str, Any]:
     growing_area_id = uuid.UUID(tool_input["growing_area_id"])
     crop_id = uuid.UUID(tool_input["crop_id"])
-    result = await db.execute(
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+
+    query = (
         select(CropCycle)
         .where(
-            CropCycle.growing_area_id == growing_area_id,
             CropCycle.crop_id == crop_id,
             CropCycle.status == CropCycleStatus.harvested,
         )
         .order_by(desc(CropCycle.harvested_at))
     )
+    if raw_plot_id:
+        query = query.where(CropCycle.growing_area_plot_id == uuid.UUID(raw_plot_id))
+    else:
+        query = query.where(CropCycle.growing_area_id == growing_area_id)
+
+    result = await db.execute(query)
     cycles = result.scalars().all()
     if not cycles:
         return {"status": "no_data", "cycles": []}
@@ -117,9 +127,20 @@ async def handle_save_yield_plan(
     tool_input: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
+    crop_cycle_id = uuid.UUID(tool_input["crop_cycle_id"])
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+
+    if raw_plot_id:
+        plot_id = uuid.UUID(raw_plot_id)
+    else:
+        cycle_result = await db.execute(select(CropCycle).where(CropCycle.id == crop_cycle_id))
+        cycle = cycle_result.scalar_one_or_none()
+        plot_id = cycle.growing_area_plot_id if cycle else None
+
     plan = YieldPlan(
-        crop_cycle_id=uuid.UUID(tool_input["crop_cycle_id"]),
+        crop_cycle_id=crop_cycle_id,
         growing_area_id=uuid.UUID(tool_input["growing_area_id"]),
+        growing_area_plot_id=plot_id,
         recommended_plant_quantity=tool_input["recommended_plant_quantity"],
         target_yield=tool_input["target_yield"],
         confidence_level=ConfidenceLevel(tool_input["confidence_level"]),
@@ -168,6 +189,8 @@ async def handle_get_historical_context(
     crop_id = uuid.UUID(tool_input["crop_id"])
     temperature = tool_input["temperature"]
     humidity = tool_input["humidity"]
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+    growing_area_plot_id = uuid.UUID(raw_plot_id) if raw_plot_id else None
 
     # Fetch crop name and area type for richer embedding text
     crop_result = await db.execute(select(Crop).where(Crop.id == crop_id))
@@ -189,6 +212,7 @@ async def handle_get_historical_context(
         growing_area_id=growing_area_id,
         crop_id=crop_id,
         embedding=embedding,
+        growing_area_plot_id=growing_area_plot_id,
         db=db,
     )
 
@@ -266,7 +290,11 @@ async def handle_create_alert(
         select(SensorReading).where(SensorReading.id == triggering_reading_id)
     )
     reading = reading_result.scalar_one_or_none()
-    plot_id = reading.growing_area_plot_id if reading else None
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+    plot_id = (
+        uuid.UUID(raw_plot_id) if raw_plot_id
+        else (reading.growing_area_plot_id if reading else None)
+    )
 
     alert = Alert(
         growing_area_id=uuid.UUID(tool_input["growing_area_id"]),

@@ -139,6 +139,40 @@ async def test_handle_get_sensor_history_no_data(db: AsyncSession, area: Growing
     assert result["readings"] == []
 
 
+async def test_handle_get_sensor_history_scoped_to_plot(
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, reading: SensorReading
+):
+    other_plot = GrowingAreaPlot(
+        growing_area_id=area.id,
+        owner_id=area.owner_id,
+        plot_index=1,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(other_plot)
+    await db.flush()
+
+    other_reading = SensorReading(
+        growing_area_id=area.id,
+        growing_area_plot_id=other_plot.id,
+        temperature=99.0,
+        humidity=20.0,
+        reading_source=ReadingSource.manual,
+        read_at=datetime.now(timezone.utc),
+        received_at=datetime.now(timezone.utc),
+        assessment_status=AssessmentStatus.pending,
+    )
+    db.add(other_reading)
+    await db.flush()
+
+    result = await handle_get_sensor_history(
+        {"growing_area_id": str(area.id), "growing_area_plot_id": str(plot.id)}, db
+    )
+    assert result["status"] == "ok"
+    assert len(result["readings"]) == 1
+    assert result["readings"][0]["temperature"] == 75.0
+
+
 # ── Cycle yield history ───────────────────────────────────────────────────────
 
 async def test_handle_get_cycle_yield_history_no_data(
@@ -177,10 +211,78 @@ async def test_handle_get_cycle_yield_history_with_data(
     assert result["cycles"][0]["actual_yield"] == 5000.0
 
 
+async def test_handle_get_cycle_yield_history_scoped_to_plot(
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, corn: Crop
+):
+    other_plot = GrowingAreaPlot(
+        growing_area_id=area.id,
+        owner_id=area.owner_id,
+        plot_index=1,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(other_plot)
+    await db.flush()
+
+    cycle_on_plot = CropCycle(
+        growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
+        crop_id=corn.id,
+        season_year=2025,
+        cycle_number=1,
+        planted_at=date(2025, 4, 1),
+        harvested_at=date(2025, 8, 1),
+        actual_yield=5000.0,
+        yield_unit=YieldUnit.bushels,
+        status=CropCycleStatus.harvested,
+    )
+    cycle_on_other = CropCycle(
+        growing_area_id=area.id,
+        growing_area_plot_id=other_plot.id,
+        crop_id=corn.id,
+        season_year=2025,
+        cycle_number=2,
+        planted_at=date(2025, 4, 1),
+        harvested_at=date(2025, 8, 1),
+        actual_yield=9999.0,
+        yield_unit=YieldUnit.bushels,
+        status=CropCycleStatus.harvested,
+    )
+    db.add_all([cycle_on_plot, cycle_on_other])
+    await db.flush()
+
+    result = await handle_get_cycle_yield_history(
+        {"growing_area_id": str(area.id), "crop_id": str(corn.id), "growing_area_plot_id": str(plot.id)},
+        db,
+    )
+    assert result["status"] == "ok"
+    assert len(result["cycles"]) == 1
+    assert result["cycles"][0]["actual_yield"] == 5000.0
+
+
 # ── Save yield plan ───────────────────────────────────────────────────────────
 
 async def test_handle_save_yield_plan(
-    db: AsyncSession, area: GrowingArea, active_cycle: CropCycle
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, active_cycle: CropCycle
+):
+    result = await handle_save_yield_plan(
+        {
+            "crop_cycle_id": str(active_cycle.id),
+            "growing_area_id": str(area.id),
+            "growing_area_plot_id": str(plot.id),
+            "recommended_plant_quantity": 25000.0,
+            "target_yield": 6000.0,
+            "confidence_level": "high",
+            "reasoning": "Based on historical yields.",
+        },
+        db,
+    )
+    assert result["status"] == "saved"
+    assert "yield_plan_id" in result
+
+
+async def test_handle_save_yield_plan_derives_plot_from_cycle(
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, active_cycle: CropCycle
 ):
     result = await handle_save_yield_plan(
         {
@@ -188,8 +290,8 @@ async def test_handle_save_yield_plan(
             "growing_area_id": str(area.id),
             "recommended_plant_quantity": 25000.0,
             "target_yield": 6000.0,
-            "confidence_level": "high",
-            "reasoning": "Based on historical yields.",
+            "confidence_level": "medium",
+            "reasoning": "Derived plot from cycle.",
         },
         db,
     )
@@ -251,6 +353,27 @@ async def test_handle_create_alert(
     )
     assert result["status"] == "created"
     assert "alert_id" in result
+
+
+async def test_handle_create_alert_explicit_plot_id(
+    db: AsyncSession, area: GrowingArea, plot: GrowingAreaPlot, reading: SensorReading
+):
+    result = await handle_create_alert(
+        {
+            "growing_area_id": str(area.id),
+            "growing_area_plot_id": str(plot.id),
+            "triggering_reading_id": str(reading.id),
+            "alert_type": "temperature_high",
+            "assessment_summary": "Temperature spiked on plot.",
+        },
+        db,
+    )
+    assert result["status"] == "created"
+
+    from sqlalchemy import select
+    from app.models.alert import Alert
+    saved = await db.get(Alert, uuid.UUID(result["alert_id"]))
+    assert saved.growing_area_plot_id == plot.id
 
 
 # ── Update alert ──────────────────────────────────────────────────────────────

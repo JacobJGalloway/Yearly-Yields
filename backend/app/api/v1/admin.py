@@ -95,9 +95,9 @@ async def seed_data(
 
     # 1. Customers
     customers = {
-        "Global Harvest": "harvest@globalharvest.example.com",
-        "National Nourish": "harvest@nationalnourish.example.com",
-        "Prairie Start Nursery": "transplant@prairiestartmnursery.example.com",
+        "Global Harvest": "jacobjgalloway@gmail.com",
+        "National Nourish": "jacobjgalloway@gmail.com",
+        "Prairie Start Nursery": "jacobjgalloway@gmail.com",
     }
     customer_map = {}
     for name, email in customers.items():

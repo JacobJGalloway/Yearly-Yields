@@ -12,8 +12,8 @@ export interface Invoice {
   rate_id: string;
   quantity: number;
   unit: YieldUnit;
-  unit_price: number;
-  total_amount: number;
+  unit_price: number | null;
+  total_amount: number | null;
   status: InvoiceStatus;
   invoice_date: string;
   due_date: string | null;
@@ -39,5 +39,18 @@ export class InvoiceService {
 
   update(id: string, payload: InvoiceUpdate): Observable<Invoice> {
     return this.http.patch<Invoice>(`${this.base}/${id}`, payload);
+  }
+
+  downloadPdf(id: string): Observable<Blob> {
+    return this.http.get(`${this.base}/${id}/pdf`, { responseType: 'blob' });
+  }
+
+  triggerDownload(blob: Blob, invoiceId: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoice-${invoiceId.slice(0, 8)}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }

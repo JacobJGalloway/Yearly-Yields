@@ -91,24 +91,43 @@ async def get_cycle_context(crop_cycle_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def get_active_alert(growing_area_id: str) -> dict[str, Any]:
+async def get_active_alert(
+    growing_area_id: str,
+    growing_area_plot_id: str | None = None,
+) -> dict[str, Any]:
     """
     Return the currently active (unresolved) alert for a growing area, or null if none.
+    When growing_area_plot_id is provided, scopes the lookup to that plot only.
     Check this before creating a new alert.
     """
     area_uuid = uuid.UUID(growing_area_id)
     pool = await _get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT id, alert_type, consecutive_normal_count,
-                   last_email_sent_at, created_at
-            FROM alerts
-            WHERE growing_area_id = $1 AND status = 'active'
-            LIMIT 1
-            """,
-            area_uuid,
-        )
+        if growing_area_plot_id:
+            row = await conn.fetchrow(
+                """
+                SELECT id, alert_type, consecutive_normal_count,
+                       last_email_sent_at, created_at
+                FROM alerts
+                WHERE growing_area_id = $1
+                  AND growing_area_plot_id = $2
+                  AND status = 'active'
+                LIMIT 1
+                """,
+                area_uuid,
+                uuid.UUID(growing_area_plot_id),
+            )
+        else:
+            row = await conn.fetchrow(
+                """
+                SELECT id, alert_type, consecutive_normal_count,
+                       last_email_sent_at, created_at
+                FROM alerts
+                WHERE growing_area_id = $1 AND status = 'active'
+                LIMIT 1
+                """,
+                area_uuid,
+            )
 
     if row is None:
         return {"active_alert": None}
@@ -127,25 +146,45 @@ async def get_active_alert(growing_area_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def get_recent_readings(growing_area_id: str, limit: int = 20) -> dict[str, Any]:
+async def get_recent_readings(
+    growing_area_id: str,
+    limit: int = 20,
+    growing_area_plot_id: str | None = None,
+) -> dict[str, Any]:
     """
-    Return recent sensor readings for a specific growing area (max 50).
+    Return recent sensor readings for a growing area (max 50).
+    When growing_area_plot_id is provided, scopes results to that plot only.
     """
     area_uuid = uuid.UUID(growing_area_id)
     limit = min(max(limit, 1), 50)
     pool = await _get_pool()
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT read_at, temperature, humidity, ph, wind_speed, assessment_status
-            FROM sensor_readings
-            WHERE growing_area_id = $1
-            ORDER BY read_at DESC
-            LIMIT $2
-            """,
-            area_uuid,
-            limit,
-        )
+        if growing_area_plot_id:
+            rows = await conn.fetch(
+                """
+                SELECT read_at, temperature, humidity, ph, wind_speed, assessment_status
+                FROM sensor_readings
+                WHERE growing_area_id = $1
+                  AND growing_area_plot_id = $2
+                ORDER BY read_at DESC
+                LIMIT $3
+                """,
+                area_uuid,
+                uuid.UUID(growing_area_plot_id),
+                limit,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT read_at, temperature, humidity, ph, wind_speed, assessment_status
+                FROM sensor_readings
+                WHERE growing_area_id = $1
+                ORDER BY read_at DESC
+                LIMIT $2
+                """,
+                area_uuid,
+                limit,
+            )
 
     return {
         "readings": [

@@ -16,6 +16,7 @@ class YieldPlanRead(BaseModel):
 
     id: uuid.UUID
     growing_area_id: uuid.UUID
+    growing_area_plot_id: uuid.UUID
     crop_cycle_id: uuid.UUID
     recommended_plant_quantity: float
     target_yield: float

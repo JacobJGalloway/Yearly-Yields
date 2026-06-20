@@ -73,6 +73,11 @@ import { InvoiceDetailDialogComponent } from './invoice-detail-dialog';
               <mat-icon>receipt_long</mat-icon>
             </button>
           }
+          <button mat-icon-button matTooltip="Download PDF"
+                  [disabled]="downloading() === i.id"
+                  (click)="downloadPdf(i)">
+            <mat-icon>picture_as_pdf</mat-icon>
+          </button>
         </td>
       </ng-container>
 
@@ -104,6 +109,7 @@ export class InvoicesComponent implements OnInit {
   invoices = signal<Invoice[]>([]);
   customers = signal<Customer[]>([]);
   cycles = signal<CropCycle[]>([]);
+  downloading = signal<string | null>(null);
 
   columns = ['customer', 'cycle', 'quantity', 'unit_price', 'total', 'status', 'invoice_date', 'actions'];
 
@@ -124,6 +130,17 @@ export class InvoicesComponent implements OnInit {
   cycleLabel(id: string): string {
     const c = this.cycles().find(c => c.id === id);
     return c ? `${c.season_year} — Cycle ${c.cycle_number}` : '—';
+  }
+
+  downloadPdf(invoice: Invoice): void {
+    this.downloading.set(invoice.id);
+    this.invoiceService.downloadPdf(invoice.id).subscribe({
+      next: blob => {
+        this.invoiceService.triggerDownload(blob, invoice.id);
+        this.downloading.set(null);
+      },
+      error: () => this.downloading.set(null),
+    });
   }
 
   openDetail(invoice: Invoice): void {

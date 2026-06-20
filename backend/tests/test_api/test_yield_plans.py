@@ -107,6 +107,7 @@ async def harvested_cycle(db: AsyncSession, growing_area: GrowingArea, plot: Gro
 async def make_mock_plan(cycle: CropCycle, db: AsyncSession) -> YieldPlan:
     plan = YieldPlan(
         growing_area_id=cycle.growing_area_id,
+        growing_area_plot_id=cycle.growing_area_plot_id,
         crop_cycle_id=cycle.id,
         recommended_plant_quantity=28000.0,
         target_yield=7000.0,

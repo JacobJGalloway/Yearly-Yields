@@ -73,8 +73,12 @@ async def find_similar_weeks(
     crop_id: uuid.UUID,
     embedding: list[float],
     db: AsyncSession,
+    growing_area_plot_id: uuid.UUID | None = None,
     limit: int = SIMILARITY_LIMIT,
 ) -> list[dict]:
+    # growing_area_plot_id is accepted for API consistency but not applied to the SQL
+    # filter — historical_summaries rolls up at the area level. Plot-scoped vector
+    # search is a v1.3 item once per-plot summary rows exist.
     """
     Find the most similar historical weeks for a given growing area and crop
     using pgvector cosine distance (<=>).

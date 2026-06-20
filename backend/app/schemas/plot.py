@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -30,6 +30,7 @@ class GrowingAreaPlotCreate(BaseModel):
 class GrowingAreaPlotUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
     harvest_weekdays: Optional[List[int]] = Field(None, description="ISO weekday integers 1=Mon … 7=Sun")
+    last_harvest_date: Optional[date] = None
     length_ft: Optional[float] = None
     width_ft: Optional[float] = None
     area_sqft: Optional[float] = None
@@ -56,6 +57,7 @@ class GrowingAreaPlotRead(BaseModel):
     name: Optional[str]
     plot_type: PlotType
     harvest_weekdays: Optional[List[int]]
+    last_harvest_date: Optional[date]
     length_ft: Optional[float]
     width_ft: Optional[float]
     area_sqft: Optional[float]
