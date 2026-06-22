@@ -24,10 +24,10 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str
     CLAUDE_MODEL: str = "claude-sonnet-4-6"
 
-    # SendGrid
-    SENDGRID_API_KEY: str
-    SENDGRID_FROM_EMAIL: str
-    SENDGRID_FROM_NAME: str = "Yearly Yields"
+    # Resend (email delivery)
+    RESEND_API_KEY: str
+    EMAIL_FROM_ADDRESS: str
+    EMAIL_FROM_NAME: str = "Yearly Yields"
 
     # NWS / NOAA
     NOAA_BASE_URL: str = "https://api.weather.gov"

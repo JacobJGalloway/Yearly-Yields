@@ -25,7 +25,6 @@ export interface Invoice {
 export interface InvoiceUpdate {
   quantity?: number;
   notes?: string;
-  status?: InvoiceStatus;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -39,6 +38,18 @@ export class InvoiceService {
 
   update(id: string, payload: InvoiceUpdate): Observable<Invoice> {
     return this.http.patch<Invoice>(`${this.base}/${id}`, payload);
+  }
+
+  send(id: string): Observable<Invoice> {
+    return this.http.post<Invoice>(`${this.base}/${id}/send`, {});
+  }
+
+  pay(id: string): Observable<Invoice> {
+    return this.http.post<Invoice>(`${this.base}/${id}/pay`, {});
+  }
+
+  void(id: string): Observable<Invoice> {
+    return this.http.post<Invoice>(`${this.base}/${id}/void`, {});
   }
 
   downloadPdf(id: string): Observable<Blob> {

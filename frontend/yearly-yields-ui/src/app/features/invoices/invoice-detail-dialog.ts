@@ -7,6 +7,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { Observable } from 'rxjs';
 import { Invoice, InvoiceService, InvoiceStatus } from '../../core/services/invoice.service';
 
 export interface InvoiceDetailDialogData {
@@ -125,12 +126,29 @@ export class InvoiceDetailDialogComponent {
     this.saving = true;
     const v = this.form.getRawValue();
 
-    this.invoiceService.update(this.invoice.id, {
+    const update$ = this.invoiceService.update(this.invoice.id, {
       quantity: v.quantity ?? undefined,
       notes: v.notes || undefined,
-      status: v.status ?? undefined,
-    }).subscribe({
-      next: updated => this.dialogRef.close(updated),
+    });
+
+    const transition$: Observable<Invoice> | null = v.status
+      ? v.status === 'sent'   ? this.invoiceService.send(this.invoice.id)
+      : v.status === 'paid'   ? this.invoiceService.pay(this.invoice.id)
+      : v.status === 'voided' ? this.invoiceService.void(this.invoice.id)
+      : null
+      : null;
+
+    update$.subscribe({
+      next: updated => {
+        if (transition$) {
+          transition$.subscribe({
+            next: final => this.dialogRef.close(final),
+            error: () => { this.saving = false; },
+          });
+        } else {
+          this.dialogRef.close(updated);
+        }
+      },
       error: () => { this.saving = false; },
     });
   }

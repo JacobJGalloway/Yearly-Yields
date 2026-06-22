@@ -6,9 +6,12 @@ The loop calls dispatch_tool() with the tool name and input from Claude,
 which routes to the correct handler and returns a JSON-serializable result.
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +23,9 @@ from app.models.alert import Alert, AlertStatus, AlertType
 from app.models.crop import Crop, CropCycle, CropCycleStatus
 from app.models.field import GrowingArea
 from app.models.sensor_reading import AssessmentStatus, SensorReading
+from app.models.user import User
 from app.models.yield_plan import ConfidenceLevel, YieldPlan
+from app.services.email_service import send_alert_email
 from app.services.vector_service import find_similar_weeks, generate_embedding
 
 
@@ -345,27 +350,39 @@ async def handle_send_alert_email(
     tool_input: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """
-    Send alert email via SendGrid.
-    TODO: implement SendGrid email service
-    """
     alert_id = uuid.UUID(tool_input["alert_id"])
-    result = await db.execute(select(Alert).where(Alert.id == alert_id))
-    alert = result.scalar_one_or_none()
-
+    alert_result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    alert = alert_result.scalar_one_or_none()
     if alert is None:
         return {"error": f"Alert {alert_id} not found."}
 
-    # TODO: call SendGrid service here
-    # For now, just stamp last_email_sent_at so the interval logic works
+    area_result = await db.execute(select(GrowingArea).where(GrowingArea.id == alert.growing_area_id))
+    area = area_result.scalar_one_or_none()
+    if area is None:
+        return {"error": f"Growing area {alert.growing_area_id} not found."}
+
+    owner_result = await db.execute(select(User).where(User.id == area.owner_id))
+    owner = owner_result.scalar_one_or_none()
+    if owner is None:
+        return {"error": f"Owner for growing area {area.id} not found."}
+
+    try:
+        await send_alert_email(
+            to_email=owner.email,
+            to_name=owner.full_name,
+            alert_type=alert.alert_type.value,
+            area_name=area.name,
+            assessment_summary=alert.assessment_summary or "No assessment available.",
+            created_at=alert.created_at,
+        )
+    except Exception:
+        logger.exception("Alert email failed for alert %s", alert_id)
+        return {"status": "email_failed", "alert_id": str(alert.id)}
+
     alert.last_email_sent_at = datetime.now(timezone.utc)
     await db.commit()
 
-    return {
-        "status": "not_implemented",
-        "message": "Email service not yet implemented. Timestamp updated.",
-        "alert_id": str(alert.id),
-    }
+    return {"status": "sent", "alert_id": str(alert.id), "to": owner.email}
 
 
 async def handle_log_reading_assessment(

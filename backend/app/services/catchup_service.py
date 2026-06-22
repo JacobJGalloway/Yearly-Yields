@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType
 from app.models.sensor_reading import AssessmentStatus, ReadingSource, SensorReading
 from app.services import nws_service
 
@@ -125,6 +125,17 @@ async def _backfill_area(area: GrowingArea, summary: str) -> None:
     )
 
     async with AsyncSessionLocal() as db:
+        sentinel_result = await db.execute(
+            select(GrowingAreaPlot).where(
+                GrowingAreaPlot.growing_area_id == area.id,
+                GrowingAreaPlot.plot_index == 0,
+            )
+        )
+        sentinel = sentinel_result.scalar_one_or_none()
+        if sentinel is None:
+            logger.warning("No sentinel plot (index=0) for area %s (%s) — skipping backfill", area.name, area.id)
+            return
+
         existing_result = await db.execute(
             select(SensorReading.read_at).where(
                 SensorReading.growing_area_id == area.id,
@@ -142,6 +153,7 @@ async def _backfill_area(area: GrowingArea, summary: str) -> None:
 
             db.add(SensorReading(
                 growing_area_id=area.id,
+                growing_area_plot_id=sentinel.id,
                 temperature=obs.get("temp_f"),
                 humidity=obs.get("humidity"),
                 wind_speed=obs.get("wind_speed"),

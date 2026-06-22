@@ -14,6 +14,7 @@ Rules:
   - Customer is resolved from InvoiceConfig per growing area, not from Crop.default_*_customer_id.
 """
 
+import logging
 import uuid
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -22,9 +23,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crop import Crop, CropCycle
+from app.models.customer import Customer
 from app.models.field import GrowingArea
 from app.models.invoice import CropRate, Invoice, InvoiceStatus
 from app.models.invoice_config import InvoiceConfig
+
+logger = logging.getLogger(__name__)
 
 VALID_INVOICE_TRANSITIONS: dict[InvoiceStatus, set[InvoiceStatus]] = {
     InvoiceStatus.draft: {InvoiceStatus.sent, InvoiceStatus.voided},
@@ -163,12 +167,38 @@ async def generate_draft(
 
 
 async def send_invoice(invoice: Invoice, db: AsyncSession) -> Invoice:
-    """Transition draft → sent and record sent_at timestamp."""
+    """Transition draft → sent, record sent_at, and email the PDF to the customer."""
     validate_invoice_transition(invoice.status, InvoiceStatus.sent)
     invoice.status = InvoiceStatus.sent
     invoice.sent_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(invoice)
+
+    if invoice.customer_id:
+        customer_result = await db.execute(select(Customer).where(Customer.id == invoice.customer_id))
+        customer = customer_result.scalar_one_or_none()
+        if customer:
+            try:
+                from app.services.email_service import send_invoice_email
+                from app.services.pdf_service import generate_invoice_pdf
+                pdf_bytes = await generate_invoice_pdf(invoice.id, db)
+                if pdf_bytes:
+                    await send_invoice_email(
+                        to_email=customer.email,
+                        to_name=customer.name,
+                        short_id=str(invoice.id)[:8].upper(),
+                        description=invoice.description or "",
+                        quantity=invoice.quantity,
+                        unit=invoice.unit.value,
+                        unit_price=invoice.unit_price,
+                        total_amount=invoice.total_amount,
+                        invoice_date=invoice.invoice_date,
+                        due_date=invoice.due_date,
+                        pdf_bytes=pdf_bytes,
+                    )
+            except Exception:
+                logger.exception("Invoice email failed for invoice %s", invoice.id)
+
     return invoice
 
 
