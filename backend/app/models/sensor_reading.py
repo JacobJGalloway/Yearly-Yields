@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, CreatedAtMixin, new_uuid
 
 if TYPE_CHECKING:
-    from app.models.field import GrowingArea
+    from app.models.field import GrowingArea, GrowingAreaPlot
     from app.models.crop import CropCycle
     from app.models.alert import Alert
 
@@ -51,6 +51,9 @@ class SensorReading(Base, CreatedAtMixin):
     growing_area_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("growing_areas.id", ondelete="CASCADE"), nullable=False
     )
+    growing_area_plot_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("growing_area_plots.id", ondelete="RESTRICT"), nullable=False
+    )
     crop_cycle_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("crop_cycles.id"), nullable=True
     )
@@ -74,6 +77,9 @@ class SensorReading(Base, CreatedAtMixin):
     # Relationships
     growing_area: Mapped["GrowingArea"] = relationship(
         "GrowingArea", back_populates="sensor_readings", lazy="select"
+    )
+    growing_area_plot: Mapped["GrowingAreaPlot"] = relationship(
+        "GrowingAreaPlot", back_populates="sensor_readings", lazy="select"
     )
     crop_cycle: Mapped[Optional["CropCycle"]] = relationship(
         "CropCycle", back_populates="sensor_readings", lazy="select"

@@ -70,6 +70,7 @@ class CropCycleRead(BaseModel):
 
     id: uuid.UUID
     growing_area_id: uuid.UUID
+    invoice_id: Optional[uuid.UUID] = None
     crop_id: Optional[uuid.UUID]
     planned_crop_id: Optional[uuid.UUID]
     season_year: int

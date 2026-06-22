@@ -75,6 +75,7 @@ async def run_anomaly_check(reading_id: uuid.UUID, db: AsyncSession) -> None:
         f"Assess this sensor reading:\n"
         f"- Reading ID: {reading.id}\n"
         f"- Growing Area ID: {reading.growing_area_id}\n"
+        f"- Growing Area Plot ID: {reading.growing_area_plot_id}\n"
         f"- Temperature: {reading.temperature}°F\n"
         f"- Humidity: {reading.humidity}%\n"
         f"- Source: {reading.reading_source.value}\n"

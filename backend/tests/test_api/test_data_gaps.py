@@ -22,7 +22,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.sensor_reading import AssessmentStatus, ReadingSource, SensorReading
 from app.models.user import User
 
@@ -69,9 +69,24 @@ async def greenhouse(db: AsyncSession, owner_user: User) -> GrowingArea:
     return area
 
 
-def _reading(area_id: uuid.UUID, read_at: datetime) -> SensorReading:
+@pytest_asyncio.fixture
+async def open_field_plot(db: AsyncSession, open_field: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=open_field.id,
+        owner_id=open_field.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+def _reading(area_id: uuid.UUID, read_at: datetime, plot_id: uuid.UUID = None) -> SensorReading:
     return SensorReading(
         growing_area_id=area_id,
+        growing_area_plot_id=plot_id,
         temperature=72.0,
         humidity=55.0,
         reading_source=ReadingSource.nws,
@@ -135,10 +150,11 @@ async def test_list_data_gaps_returns_area_with_no_readings(
 
 
 async def test_list_data_gaps_no_gap_for_recent_reading(
-    client: AsyncClient, db: AsyncSession, open_field: GrowingArea, owner_token: str
+    client: AsyncClient, db: AsyncSession, open_field: GrowingArea,
+    open_field_plot: GrowingAreaPlot, owner_token: str
 ):
     """Area with a reading within the threshold does not appear."""
-    recent = _reading(open_field.id, datetime.now(timezone.utc) - timedelta(days=1))
+    recent = _reading(open_field.id, datetime.now(timezone.utc) - timedelta(days=1), open_field_plot.id)
     db.add(recent)
     await db.flush()
 
@@ -148,11 +164,12 @@ async def test_list_data_gaps_no_gap_for_recent_reading(
 
 
 async def test_list_data_gaps_stale_reading_produces_gap(
-    client: AsyncClient, db: AsyncSession, open_field: GrowingArea, owner_token: str
+    client: AsyncClient, db: AsyncSession, open_field: GrowingArea,
+    open_field_plot: GrowingAreaPlot, owner_token: str
 ):
     """Last reading older than GAP_THRESHOLD_DAYS → gap returned with correct gap_days."""
     stale_dt = datetime.now(timezone.utc) - timedelta(days=10)
-    db.add(_reading(open_field.id, stale_dt))
+    db.add(_reading(open_field.id, stale_dt, open_field_plot.id))
     await db.flush()
 
     response = await client.get("/api/v1/data-gaps/", headers=_auth(owner_token))

@@ -4,8 +4,10 @@ import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { Observable } from 'rxjs';
 import { Invoice, InvoiceService, InvoiceStatus } from '../../core/services/invoice.service';
 
 export interface InvoiceDetailDialogData {
@@ -28,6 +30,7 @@ const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
     ReactiveFormsModule,
     MatDialogModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatSelectModule,
     MatButtonModule,
@@ -70,6 +73,10 @@ const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-stroked-button [disabled]="downloading" (click)="downloadPdf()">
+        <mat-icon>picture_as_pdf</mat-icon>
+        {{ downloading ? 'Downloading…' : 'Download PDF' }}
+      </button>
       <button mat-flat-button [disabled]="saving" (click)="save()">
         {{ saving ? 'Saving…' : 'Save' }}
       </button>
@@ -96,6 +103,7 @@ export class InvoiceDetailDialogComponent {
   invoice = this.data.invoice;
   nextStatuses = TRANSITIONS[this.invoice.status];
   saving = false;
+  downloading = false;
 
   form = this.fb.group({
     quantity: [this.invoice.quantity],
@@ -103,16 +111,44 @@ export class InvoiceDetailDialogComponent {
     status: [null as InvoiceStatus | null],
   });
 
+  downloadPdf(): void {
+    this.downloading = true;
+    this.invoiceService.downloadPdf(this.invoice.id).subscribe({
+      next: blob => {
+        this.invoiceService.triggerDownload(blob, this.invoice.id);
+        this.downloading = false;
+      },
+      error: () => { this.downloading = false; },
+    });
+  }
+
   save(): void {
     this.saving = true;
     const v = this.form.getRawValue();
 
-    this.invoiceService.update(this.invoice.id, {
+    const update$ = this.invoiceService.update(this.invoice.id, {
       quantity: v.quantity ?? undefined,
       notes: v.notes || undefined,
-      status: v.status ?? undefined,
-    }).subscribe({
-      next: updated => this.dialogRef.close(updated),
+    });
+
+    const transition$: Observable<Invoice> | null = v.status
+      ? v.status === 'sent'   ? this.invoiceService.send(this.invoice.id)
+      : v.status === 'paid'   ? this.invoiceService.pay(this.invoice.id)
+      : v.status === 'voided' ? this.invoiceService.void(this.invoice.id)
+      : null
+      : null;
+
+    update$.subscribe({
+      next: updated => {
+        if (transition$) {
+          transition$.subscribe({
+            next: final => this.dialogRef.close(final),
+            error: () => { this.saving = false; },
+          });
+        } else {
+          this.dialogRef.close(updated);
+        }
+      },
       error: () => { this.saving = false; },
     });
   }

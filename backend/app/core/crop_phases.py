@@ -18,6 +18,7 @@ class PhaseDays:
     seeding_sub_phases: tuple[SubPhase, ...] = ()
     growing_sub_phases: tuple[SubPhase, ...] = ()
     harvest_sub_phases: tuple[SubPhase, ...] = ()
+    min_pick_interval_days: int | None = None  # None = single terminal harvest; set for continuous-pick crops
 
 
 # All day counts use midpoint averages of observed ranges.
@@ -38,6 +39,7 @@ CROP_PHASE_DEFAULTS: dict[str, PhaseDays] = {
         seeding_days=37,    # germination(7) + early growth(30)
         growing_days=104,   # vegetative(22) + flowering(20) + pollination(20) + fruit formation(25) + ripening(17)
         harvest_days=0,     # sentinel — computed dynamically from forecasted_end_date
+        min_pick_interval_days=6,  # 6-day rotation between picks on the same row
         seeding_sub_phases=(
             SubPhase("germination", "Germination", 0, 7),
             SubPhase("early_growth", "Early Growth", 7, 37),

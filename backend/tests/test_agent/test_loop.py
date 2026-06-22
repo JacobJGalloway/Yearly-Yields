@@ -19,16 +19,19 @@ import app.agent.loop as loop_module
 from app.agent.loop import _call_mcp_tool, _get_all_tools, run_anomaly_check
 from app.agent.tools import ANOMALY_WRITE_TOOLS
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.sensor_reading import AssessmentStatus, ReadingSource, SensorReading
 from app.models.user import User
 from tests.conftest import auth_headers
 
 
 @pytest_asyncio.fixture
-async def pending_reading(db: AsyncSession, growing_area: GrowingArea) -> SensorReading:
+async def pending_reading(
+    db: AsyncSession, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot
+) -> SensorReading:
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         temperature=74.0,
         humidity=60.0,
         reading_source=ReadingSource.manual,
@@ -46,6 +49,7 @@ async def test_posting_reading_triggers_anomaly_check(
     client: AsyncClient,
     owner_token: str,
     growing_area: GrowingArea,
+    growing_area_plot: GrowingAreaPlot,
 ):
     """Verify run_anomaly_check is scheduled as a BackgroundTask when a reading is posted."""
     with patch(
@@ -75,6 +79,7 @@ async def test_reading_starts_with_pending_status(
     client: AsyncClient,
     owner_token: str,
     growing_area: GrowingArea,
+    growing_area_plot: GrowingAreaPlot,
 ):
     """Assessment status must be pending immediately on creation before the agent runs."""
     with patch("app.api.v1.sensor_readings.run_anomaly_check", new=AsyncMock()):
@@ -125,9 +130,19 @@ async def test_loop_handles_crop_context(db: AsyncSession, owner_user: User):
     crop = Crop(name="corn", greenhouse_compatible=False, typical_cycle_days=167)
     db.add(crop)
     await db.flush()
+    plot = GrowingAreaPlot(
+        growing_area_id=area.id,
+        owner_id=area.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(plot)
+    await db.flush()
 
     cycle = CropCycle(
         growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
         crop_id=crop.id,
         season_year=2026,
         cycle_number=1,
@@ -140,6 +155,7 @@ async def test_loop_handles_crop_context(db: AsyncSession, owner_user: User):
 
     reading = SensorReading(
         growing_area_id=area.id,
+        growing_area_plot_id=plot.id,
         crop_cycle_id=cycle.id,
         temperature=74.0,
         humidity=60.0,
@@ -228,11 +244,12 @@ async def test_call_mcp_tool_error_response():
 
 @pytest.mark.asyncio
 async def test_loop_dispatches_mcp_tool(
-    db: AsyncSession, owner_user: User, growing_area: GrowingArea
+    db: AsyncSession, owner_user: User, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot
 ):
     """Loop routes MCP tool names to _call_mcp_tool instead of dispatch_tool."""
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         temperature=72.0,
         humidity=55.0,
         reading_source=ReadingSource.manual,
@@ -297,11 +314,12 @@ async def test_loop_reading_not_found(db: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_loop_end_turn_marks_reading_processing(
-    db: AsyncSession, owner_user: User, growing_area: GrowingArea
+    db: AsyncSession, owner_user: User, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot
 ):
     """Claude returning end_turn (no tool call) leaves the loop without crashing."""
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         temperature=72.0,
         humidity=55.0,
         reading_source=ReadingSource.manual,
@@ -329,11 +347,12 @@ async def test_loop_end_turn_marks_reading_processing(
 
 @pytest.mark.asyncio
 async def test_loop_skips_non_tool_use_blocks(
-    db: AsyncSession, owner_user: User, growing_area: GrowingArea
+    db: AsyncSession, owner_user: User, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot
 ):
     """Text blocks in a Claude response are ignored; loop still terminates on log_reading_assessment."""
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         temperature=72.0,
         humidity=55.0,
         reading_source=ReadingSource.manual,
@@ -375,11 +394,12 @@ async def test_loop_skips_non_tool_use_blocks(
 
 @pytest.mark.asyncio
 async def test_loop_appends_intermediate_results_and_continues(
-    db: AsyncSession, owner_user: User, growing_area: GrowingArea
+    db: AsyncSession, owner_user: User, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot
 ):
     """Multi-tool response with no terminal tool appends results and loops for next response."""
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         temperature=72.0,
         humidity=55.0,
         reading_source=ReadingSource.manual,
@@ -416,10 +436,13 @@ async def test_loop_appends_intermediate_results_and_continues(
 
 
 @pytest.mark.asyncio
-async def test_loop_handles_exception(db: AsyncSession, owner_user: User, growing_area: GrowingArea):
+async def test_loop_handles_exception(
+    db: AsyncSession, owner_user: User, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot
+):
     """When the Anthropic call raises, the loop marks the reading as error."""
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         temperature=74.0,
         humidity=60.0,
         reading_source=ReadingSource.manual,

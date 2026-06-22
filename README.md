@@ -2,7 +2,7 @@
   <img src="frontend/src/assets/brand/Logo Work Default Mode.png" alt="Yearly Yields" width="480"/>
 </p>
 
-<p align="center"><strong>v1.1</strong></p>
+<p align="center"><strong>v1.2</strong></p>
 
 An agricultural monitoring and yield prediction system built for Mid-West farmers. Ingests IoT sensor readings from open fields and greenhouses, detects anomalies against rolling historical data using a ReAct agentic loop powered by Claude, fires email alerts, and supports yield planning and invoice tracking across crop cycles.
 
@@ -11,10 +11,32 @@ An agricultural monitoring and yield prediction system built for Mid-West farmer
 - Ingests various types of sensor readings (i.e. air temperature, humidity, pH level, etc.) from IoT sensors across fields and greenhouses
   > *Note: Real IoT sensor data is not yet available. NWS CO-OP station observations (via api.weather.gov) substitute for open field readings. Greenhouse readings use fIoT simulation — NWS ambient data plus per-building temperature and humidity offsets — to approximate controlled growing environments.*
 - Runs a ReAct agentic loop (Reason + Act) on every reading — pulling historical context via pgvector similarity search, querying live weather from NWS, and deciding whether to raise, update, or resolve alerts
-- Fires email alerts on the first anomaly and every 24 hours until 3 consecutive normal readings resolve the alert
-- Tracks crop cycles with greenhouse compatibility enforcement and auto-generates draft invoices on harvest
-- Supports yield planning and fallow field recommendations based on sensor history
+- Fires email alerts (via Resend) on the first anomaly and every 24 hours until 3 consecutive normal readings resolve the alert
+- Tracks crop cycles with greenhouse compatibility enforcement, auto-generates draft invoices on harvest, and emails the PDF to the customer on send
+- Guides yield planning through a conversational step-by-step wizard powered by a Claude ReAct agent
+- Supports GrowingAreaPlot sub-area tracking — greenhouse rows and open-field trial plots with staggered crop cycles, plot-scoped alerts, and sentinel plot compatibility for NWS area-level readings
 - Full JWT authentication with role-based access control (owner, farmer, hired hand)
+
+## AI / RAG Architecture
+
+Anomaly detection and yield reasoning are powered by a Retrieval-Augmented Generation (RAG) pipeline built on `pgvector`, feeding a ReAct (Reason + Act) agentic loop running on Claude.
+
+**Retrieval layer**
+
+- Every sensor reading is embedded using voyage-3 and stored alongside structured aggregates in `historical_summaries` — weekly rollups of temperature, humidity, and reading counts per growing area and crop.
+- When a new reading arrives, the agent performs a similarity search against `historical_summaries` to retrieve the most relevant historical context for that growing area and crop — grounding the model's reasoning in actual seasonal patterns rather than generic thresholds.
+- Retrieval is scoped at the plot level (see `GrowingAreaPlot`, v1.2) so that conditions in one greenhouse row don't pollute the historical context for another.
+
+**Augmentation + reasoning loop**
+
+- The ReAct loop combines three context sources per decision: the new sensor reading, retrieved historical summaries (RAG), and live weather data from NWS CO-OP / api.weather.gov.
+- The agent reasons over this combined context to classify the reading as normal or anomalous, and decides whether to raise, update, or resolve an alert — all decisions are logged with the retrieved context that informed them.
+- The same retrieval pipeline backs yield planning: historical summaries for a growing area's crop history are retrieved and synthesized into yield predictions and fallow-field recommendations.
+
+**Lifecycle management**
+
+- A quarterly summarization job aggregates raw sensor readings into `historical_summaries` rows and generates their embeddings, keeping the vector store proportional to the number of growing-area/crop/week combinations rather than raw reading volume.
+- Embeddings are refreshed (not deleted) when underlying aggregates change, preserving long-term historical context for retrieval even after source readings are purged.
 
 ## Growing Areas / Crops (initial scope)
 
@@ -53,7 +75,7 @@ Draft invoices sit in review until an owner or farmer sends them. From there the
 | Database | PostgreSQL 16 + pgvector |
 | AI | Anthropic Claude (`claude-sonnet-4-6`) + voyage-3 embeddings, ReAct loop |
 | Auth  | JWT (python-jose) + bcrypt + RBAC |
-| Alerts | SendGrid |
+| Alerts & invoice email | Resend |
 | Weather | NWS CO-OP (api.weather.gov) + NOAA CDO (historical backfill) |
 | Frontend | Angular 21 + Angular Material 3 (teal/cyan palette, brand token system) + NgRx |
 
@@ -75,16 +97,18 @@ Swagger UI: http://localhost:8000/docs
 ```bash
 # 0. Copy and configure environment (first time only)
 cp backend/.env.example backend/.env
-# → Fill in DATABASE_URL, SECRET_KEY, ANTHROPIC_API_KEY, and SENDGRID_API_KEY
+# → Fill in DATABASE_URL, SECRET_KEY, ANTHROPIC_API_KEY
+# → Fill in RESEND_API_KEY, EMAIL_FROM_ADDRESS (must be a Resend-verified domain or onboarding@resend.dev for dev)
 
 # 1. Start PostgreSQL (required first)
 cd backend
 docker compose up -d
 
 # 2. Apply database migrations (first time, or after pulling new migrations)
+# (still in backend/)
 python -m alembic upgrade head
 
-# 3. Start the backend
+# 3. Start the backend (still in backend/)
 python -m uvicorn app.main:app --reload
 # → http://127.0.0.1:8000  |  Swagger: http://127.0.0.1:8000/docs
 
@@ -101,7 +125,7 @@ cd backend
 python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=50
 ```
 
-- **Current coverage:** 338 tests, ~85% — all service and API layers covered. Remaining gaps are excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
+- **Current coverage:** 345 tests, ~84% — all service and API layers covered. Remaining gaps are excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
 
 ## First-time setup
 
@@ -164,13 +188,15 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 
 ## Future Features
 
-### v1.2
-- **`GrowingAreaPlot` sub-area model** *(schema-breaking — prerequisite for several items below)* — Introduces a `GrowingAreaPlot` layer between `GrowingArea` and `CropCycle`, enabling greenhouse row management and open-field trial plots. Greenhouse rows run staggered crop cycles (e.g., GH1 rows 1/2/3 harvested on different weekday pairs); open fields get `plot_id = 0` transparently. NWS readings stay at the area level; crop cycles, alerts, and sensor readings move to the plot level. All agent tools become plot-aware.
-- **AI-guided yield plan wizard** — Replace the static "Generate Yield Plan" form with a conversational wizard. The agent asks the farmer a structured set of questions (growing area, current phase, historical yield, market demand) and synthesizes the answers into a recommended target yield with reasoning. The final decision stays with the owner or farmer. Requires growing area selection support, which is absent from the current form.
+### v1.3
 - **pgvector embedding purge** — Remove voyage-3 embeddings from `pgvector` for sensor readings that have been deleted or rolled into weekly summaries, preventing the vector store from growing unboundedly.
+- **Invoice customer assignment in UI** — Draft invoices currently require Swagger to assign or change the customer. A customer dropdown on the invoice detail card would eliminate this friction for farmers.
+- **Demo reset endpoint** — `POST /api/v1/admin/demo-reset` (owner-only, disabled in production) wipes and rebuilds crop cycle data with `planted_at` recalculated relative to today, so every demo starts with cycles visibly mid-season without manual seed recalculation.
+- **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
+
+### Possible Future Features
 - **User-to-growing-area assignment model** — Allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
 - **Configurable crop phase day admin UI** — Seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
 - **IoT reading source** — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
-- **SMS alert notifications** — Send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing SendGrid email fan-out.
-- **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
+- **SMS alert notifications** — Send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing email delivery.
 

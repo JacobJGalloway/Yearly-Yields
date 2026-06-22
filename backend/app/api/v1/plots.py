@@ -1,7 +1,9 @@
 import uuid
-from typing import List
+from datetime import date
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +12,7 @@ from app.dependencies import get_current_user, require_role
 from app.models.field import GrowingArea, GrowingAreaPlot
 from app.models.user import User, UserRole
 from app.schemas.plot import GrowingAreaPlotCreate, GrowingAreaPlotRead, GrowingAreaPlotUpdate
+from app.services.plot_service import check_weekday_overlap, get_harvest_plots_for_date, log_harvest_pick
 
 router = APIRouter()
 
@@ -40,11 +43,22 @@ async def create_plot(
 ) -> GrowingAreaPlotRead:
     await _get_area_or_404(area_id, current_user, db)
 
+    if payload.plot_index == 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="plot_index 0 is reserved for the open-field sentinel and cannot be assigned manually.",
+        )
+
+    if payload.harvest_weekdays:
+        await check_weekday_overlap(area_id, payload.harvest_weekdays, None, db)
+
     plot = GrowingAreaPlot(
         growing_area_id=area_id,
         owner_id=current_user.id,
+        plot_index=payload.plot_index,
         name=payload.name,
         plot_type=payload.plot_type,
+        harvest_weekdays=payload.harvest_weekdays,
         length_ft=payload.length_ft,
         width_ft=payload.width_ft,
         area_sqft=payload.area_sqft,
@@ -54,6 +68,18 @@ async def create_plot(
     await db.commit()
     await db.refresh(plot)
     return GrowingAreaPlotRead.model_validate(plot)
+
+
+@router.get("/schedule", response_model=List[GrowingAreaPlotRead])
+async def get_today_schedule(
+    area_id: uuid.UUID,
+    on_date: Optional[date] = Query(None, description="ISO date; defaults to today"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[GrowingAreaPlotRead]:
+    await _get_area_or_404(area_id, current_user, db)
+    plots = await get_harvest_plots_for_date(area_id, on_date, db)
+    return [GrowingAreaPlotRead.model_validate(p) for p in plots]
 
 
 @router.get("/", response_model=List[GrowingAreaPlotRead])
@@ -111,9 +137,30 @@ async def update_plot(
     if plot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plot not found")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if "harvest_weekdays" in updates and updates["harvest_weekdays"]:
+        await check_weekday_overlap(area_id, updates["harvest_weekdays"], plot_id, db)
+
+    for field, value in updates.items():
         setattr(plot, field, value)
 
     await db.commit()
     await db.refresh(plot)
+    return GrowingAreaPlotRead.model_validate(plot)
+
+
+class LogPickRequest(BaseModel):
+    pick_date: Optional[date] = None
+
+
+@router.post("/{plot_id}/log-pick", response_model=GrowingAreaPlotRead)
+async def log_pick(
+    area_id: uuid.UUID,
+    plot_id: uuid.UUID,
+    payload: LogPickRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.farmer, UserRole.owner)),
+) -> GrowingAreaPlotRead:
+    await _get_area_or_404(area_id, current_user, db)
+    plot = await log_harvest_pick(plot_id, payload.pick_date, db)
     return GrowingAreaPlotRead.model_validate(plot)

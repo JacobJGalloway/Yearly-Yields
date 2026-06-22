@@ -8,7 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { CropCycle, CropService } from '../../core/services/crop.service';
 import { FieldService, GrowingArea } from '../../core/services/field.service';
 import { YieldPlan, YieldPlanService } from '../../core/services/yield-plan.service';
-import { YieldPlanDialogComponent } from './yield-plan-dialog';
+import { YieldPlanWizardComponent } from './yield-plan-wizard';
 
 @Component({
   selector: 'app-yield-plans',
@@ -25,11 +25,9 @@ import { YieldPlanDialogComponent } from './yield-plan-dialog';
   template: `
     <div class="page-header">
       <h2>Yield Plans</h2>
-      <!-- v1.2: replace with AI-guided wizard (growing area selector, agent Q&A, owner confirms target yield)
       <button mat-flat-button (click)="openGenerate()">
         <mat-icon>auto_awesome</mat-icon> Generate Plan
       </button>
-      -->
     </div>
 
     <table mat-table [dataSource]="plans()" class="plans-table mat-elevation-z1">
@@ -77,7 +75,7 @@ import { YieldPlanDialogComponent } from './yield-plan-dialog';
     </table>
 
     @if (plans().length === 0) {
-      <p class="empty-state">No yield plans yet. Plans are entered manually until the v1.2 guided wizard is available.</p>
+      <p class="empty-state">No yield plans yet. Click Generate Plan to get started.</p>
     }
   `,
   styles: [`
@@ -125,9 +123,10 @@ export class YieldPlansComponent implements OnInit {
   }
 
   openGenerate(): void {
-    const activeCycles = this.cycles().filter(c => c.status === 'active');
-    const ref = this.dialog.open(YieldPlanDialogComponent, {
-      data: { cycles: activeCycles },
+    const ref = this.dialog.open(YieldPlanWizardComponent, {
+      data: { areas: this.fields() },
+      width: '600px',
+      maxWidth: '95vw',
     });
     ref.afterClosed().subscribe(plan => {
       if (plan) this.load();

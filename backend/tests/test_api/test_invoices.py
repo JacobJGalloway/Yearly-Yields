@@ -11,10 +11,10 @@ Greenhouse workflow:
   - Transplant invoice uses correct customer, not harvest customer
 
 Invoice lifecycle:
-  - draft → sent (valid)
-  - sent → paid (valid)
-  - draft → voided (valid)
-  - paid is terminal — any further transition returns 422
+  - draft → sent via POST /send (valid)
+  - sent → paid via POST /pay (valid)
+  - draft → voided via POST /void (valid)
+  - paid is terminal — any further transition returns 409
   - Quantity update recalculates total_amount
   - hired_hand cannot view or update invoices
 """
@@ -30,8 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
 from app.models.customer import Customer
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.invoice import CropRate, Invoice, InvoiceStatus
+from app.models.invoice_config import InvoiceConfig
 from app.models.user import User
 from tests.conftest import auth_headers
 
@@ -160,9 +161,69 @@ async def greenhouse(db: AsyncSession, owner_user: User) -> GrowingArea:
 
 
 @pytest_asyncio.fixture
-async def corn_cycle(db: AsyncSession, open_field: GrowingArea, corn: Crop, corn_rate: CropRate) -> CropCycle:
+async def open_field_plot(db: AsyncSession, open_field: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=open_field.id,
+        owner_id=open_field.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
+async def greenhouse_plot(db: AsyncSession, greenhouse: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=greenhouse.id,
+        owner_id=greenhouse.owner_id,
+        plot_index=0,
+        plot_type=PlotType.dwc_row,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
+async def open_field_invoice_config(
+    db: AsyncSession, open_field: GrowingArea, harvest_customer: Customer
+) -> InvoiceConfig:
+    config = InvoiceConfig(
+        growing_area_id=open_field.id,
+        harvest_customer_id=harvest_customer.id,
+    )
+    db.add(config)
+    await db.flush()
+    return config
+
+
+@pytest_asyncio.fixture
+async def greenhouse_invoice_config(
+    db: AsyncSession, greenhouse: GrowingArea,
+    harvest_customer: Customer, transplant_customer: Customer,
+) -> InvoiceConfig:
+    config = InvoiceConfig(
+        growing_area_id=greenhouse.id,
+        harvest_customer_id=harvest_customer.id,
+        transplant_customer_id=transplant_customer.id,
+    )
+    db.add(config)
+    await db.flush()
+    return config
+
+
+@pytest_asyncio.fixture
+async def corn_cycle(
+    db: AsyncSession, open_field: GrowingArea, open_field_plot: GrowingAreaPlot,
+    open_field_invoice_config: InvoiceConfig, corn: Crop, corn_rate: CropRate,
+) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=open_field.id,
+        growing_area_plot_id=open_field_plot.id,
         crop_id=corn.id,
         season_year=2026,
         cycle_number=1,
@@ -176,7 +237,9 @@ async def corn_cycle(db: AsyncSession, open_field: GrowingArea, corn: Crop, corn
 
 
 @pytest_asyncio.fixture
-async def corn_cycle_no_customer(db: AsyncSession, open_field: GrowingArea, corn_no_customer: Crop) -> CropCycle:
+async def corn_cycle_no_customer(
+    db: AsyncSession, open_field: GrowingArea, open_field_plot: GrowingAreaPlot, corn_no_customer: Crop
+) -> CropCycle:
     rate = CropRate(
         crop_id=corn_no_customer.id,
         rate_per_unit=5.50,
@@ -188,6 +251,7 @@ async def corn_cycle_no_customer(db: AsyncSession, open_field: GrowingArea, corn
     await db.flush()
     cycle = CropCycle(
         growing_area_id=open_field.id,
+        growing_area_plot_id=open_field_plot.id,
         crop_id=corn_no_customer.id,
         season_year=2026,
         cycle_number=2,
@@ -201,9 +265,13 @@ async def corn_cycle_no_customer(db: AsyncSession, open_field: GrowingArea, corn
 
 
 @pytest_asyncio.fixture
-async def tomato_cycle(db: AsyncSession, greenhouse: GrowingArea, tomatoes: Crop, tomato_rate: CropRate) -> CropCycle:
+async def tomato_cycle(
+    db: AsyncSession, greenhouse: GrowingArea, greenhouse_plot: GrowingAreaPlot,
+    greenhouse_invoice_config: InvoiceConfig, tomatoes: Crop, tomato_rate: CropRate,
+) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=greenhouse.id,
+        growing_area_plot_id=greenhouse_plot.id,
         crop_id=tomatoes.id,
         season_year=2026,
         cycle_number=1,
@@ -241,12 +309,13 @@ async def test_harvest_creates_draft_invoice(
 
 
 @pytest.mark.asyncio
-async def test_harvest_no_invoice_without_default_customer(
+async def test_harvest_creates_invoice_with_null_customer_when_no_config(
     client: AsyncClient,
     db: AsyncSession,
     owner_token: str,
     corn_cycle_no_customer: CropCycle,
 ):
+    """v1.2: invoice always created; customer_id is null if no InvoiceConfig for the area."""
     response = await client.patch(
         f"/api/v1/crops/cycles/{corn_cycle_no_customer.id}",
         json={"status": "harvested", "actual_yield": 3000.0, "harvested_at": "2026-08-15"},
@@ -257,7 +326,9 @@ async def test_harvest_no_invoice_without_default_customer(
     result = await db.execute(
         select(Invoice).where(Invoice.crop_cycle_id == corn_cycle_no_customer.id)
     )
-    assert result.scalar_one_or_none() is None
+    invoice = result.scalar_one_or_none()
+    assert invoice is not None
+    assert invoice.customer_id is None
 
 
 # ── Auto-generation: transplant ───────────────────────────────────────────────
@@ -291,7 +362,7 @@ async def draft_invoice(db: AsyncSession, corn_cycle: CropCycle, harvest_custome
     invoice = Invoice(
         customer_id=harvest_customer.id,
         crop_cycle_id=corn_cycle.id,
-        rate_id=corn_rate.id,
+        crop_rate_id=corn_rate.id,
         quantity=5000.0,
         unit=YieldUnit.bushels,
         unit_price=5.50,
@@ -308,9 +379,8 @@ async def draft_invoice(db: AsyncSession, corn_cycle: CropCycle, harvest_custome
 async def test_invoice_draft_to_sent(
     client: AsyncClient, owner_token: str, draft_invoice: Invoice
 ):
-    response = await client.patch(
-        f"/api/v1/invoices/{draft_invoice.id}",
-        json={"status": "sent"},
+    response = await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/send",
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 200
@@ -321,14 +391,12 @@ async def test_invoice_draft_to_sent(
 async def test_invoice_sent_to_paid(
     client: AsyncClient, owner_token: str, draft_invoice: Invoice
 ):
-    await client.patch(
-        f"/api/v1/invoices/{draft_invoice.id}",
-        json={"status": "sent"},
+    await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/send",
         headers=auth_headers(owner_token),
     )
-    response = await client.patch(
-        f"/api/v1/invoices/{draft_invoice.id}",
-        json={"status": "paid"},
+    response = await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/pay",
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 200
@@ -339,9 +407,8 @@ async def test_invoice_sent_to_paid(
 async def test_invoice_draft_to_voided(
     client: AsyncClient, owner_token: str, draft_invoice: Invoice
 ):
-    response = await client.patch(
-        f"/api/v1/invoices/{draft_invoice.id}",
-        json={"status": "voided"},
+    response = await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/void",
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 200
@@ -352,22 +419,19 @@ async def test_invoice_draft_to_voided(
 async def test_invoice_paid_is_terminal(
     client: AsyncClient, owner_token: str, draft_invoice: Invoice
 ):
-    await client.patch(
-        f"/api/v1/invoices/{draft_invoice.id}",
-        json={"status": "sent"},
+    await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/send",
         headers=auth_headers(owner_token),
     )
-    await client.patch(
-        f"/api/v1/invoices/{draft_invoice.id}",
-        json={"status": "paid"},
+    await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/pay",
         headers=auth_headers(owner_token),
     )
-    response = await client.patch(
-        f"/api/v1/invoices/{draft_invoice.id}",
-        json={"status": "voided"},
+    response = await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/void",
         headers=auth_headers(owner_token),
     )
-    assert response.status_code == 422
+    assert response.status_code == 409
 
 
 @pytest.mark.asyncio
@@ -435,3 +499,39 @@ async def test_update_invoice_not_found_returns_404(
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 404
+
+
+# ── PDF endpoint ──────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_invoice_pdf_success(
+    client: AsyncClient, owner_token: str, draft_invoice: Invoice
+):
+    response = await client.get(
+        f"/api/v1/invoices/{draft_invoice.id}/pdf",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers["content-disposition"]
+    assert len(response.content) > 1000
+
+
+@pytest.mark.asyncio
+async def test_get_invoice_pdf_not_found(client: AsyncClient, owner_token: str):
+    response = await client.get(
+        f"/api/v1/invoices/{uuid.uuid4()}/pdf",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_hired_hand_cannot_get_pdf(
+    client: AsyncClient, hired_hand_token: str, draft_invoice: Invoice
+):
+    response = await client.get(
+        f"/api/v1/invoices/{draft_invoice.id}/pdf",
+        headers=auth_headers(hired_hand_token),
+    )
+    assert response.status_code == 403

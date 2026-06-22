@@ -22,16 +22,19 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert, AlertStatus, AlertType
-from app.models.field import GrowingArea
+from app.models.field import GrowingArea, GrowingAreaPlot
 from app.models.sensor_reading import AssessmentStatus, ReadingSource, SensorReading
 from app.models.user import User
 from tests.conftest import auth_headers
 
 
 @pytest_asyncio.fixture
-async def sensor_reading(db: AsyncSession, growing_area: GrowingArea) -> SensorReading:
+async def sensor_reading(
+    db: AsyncSession, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot
+) -> SensorReading:
     reading = SensorReading(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         temperature=102.0,
         humidity=18.0,
         reading_source=ReadingSource.manual,
@@ -45,9 +48,13 @@ async def sensor_reading(db: AsyncSession, growing_area: GrowingArea) -> SensorR
 
 
 @pytest_asyncio.fixture
-async def active_alert(db: AsyncSession, growing_area: GrowingArea, sensor_reading: SensorReading) -> Alert:
+async def active_alert(
+    db: AsyncSession, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot,
+    sensor_reading: SensorReading,
+) -> Alert:
     alert = Alert(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         triggering_reading_id=sensor_reading.id,
         alert_type=AlertType.temperature_high,
         status=AlertStatus.active,
@@ -59,9 +66,13 @@ async def active_alert(db: AsyncSession, growing_area: GrowingArea, sensor_readi
 
 
 @pytest_asyncio.fixture
-async def resolved_alert(db: AsyncSession, growing_area: GrowingArea, sensor_reading: SensorReading) -> Alert:
+async def resolved_alert(
+    db: AsyncSession, growing_area: GrowingArea, growing_area_plot: GrowingAreaPlot,
+    sensor_reading: SensorReading,
+) -> Alert:
     alert = Alert(
         growing_area_id=growing_area.id,
+        growing_area_plot_id=growing_area_plot.id,
         triggering_reading_id=sensor_reading.id,
         alert_type=AlertType.humidity_low,
         status=AlertStatus.resolved,

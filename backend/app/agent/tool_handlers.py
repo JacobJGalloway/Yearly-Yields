@@ -6,9 +6,12 @@ The loop calls dispatch_tool() with the tool name and input from Claude,
 which routes to the correct handler and returns a JSON-serializable result.
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +23,9 @@ from app.models.alert import Alert, AlertStatus, AlertType
 from app.models.crop import Crop, CropCycle, CropCycleStatus
 from app.models.field import GrowingArea
 from app.models.sensor_reading import AssessmentStatus, SensorReading
+from app.models.user import User
 from app.models.yield_plan import ConfidenceLevel, YieldPlan
+from app.services.email_service import send_alert_email
 from app.services.vector_service import find_similar_weeks, generate_embedding
 
 
@@ -53,12 +58,15 @@ async def handle_get_sensor_history(
     db: AsyncSession,
 ) -> dict[str, Any]:
     growing_area_id = uuid.UUID(tool_input["growing_area_id"])
-    result = await db.execute(
-        select(SensorReading)
-        .where(SensorReading.growing_area_id == growing_area_id)
-        .order_by(desc(SensorReading.read_at))
-        .limit(90)
-    )
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+
+    query = select(SensorReading).order_by(desc(SensorReading.read_at)).limit(90)
+    if raw_plot_id:
+        query = query.where(SensorReading.growing_area_plot_id == uuid.UUID(raw_plot_id))
+    else:
+        query = query.where(SensorReading.growing_area_id == growing_area_id)
+
+    result = await db.execute(query)
     readings = result.scalars().all()
     if not readings:
         return {"status": "no_data", "readings": []}
@@ -83,15 +91,22 @@ async def handle_get_cycle_yield_history(
 ) -> dict[str, Any]:
     growing_area_id = uuid.UUID(tool_input["growing_area_id"])
     crop_id = uuid.UUID(tool_input["crop_id"])
-    result = await db.execute(
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+
+    query = (
         select(CropCycle)
         .where(
-            CropCycle.growing_area_id == growing_area_id,
             CropCycle.crop_id == crop_id,
             CropCycle.status == CropCycleStatus.harvested,
         )
         .order_by(desc(CropCycle.harvested_at))
     )
+    if raw_plot_id:
+        query = query.where(CropCycle.growing_area_plot_id == uuid.UUID(raw_plot_id))
+    else:
+        query = query.where(CropCycle.growing_area_id == growing_area_id)
+
+    result = await db.execute(query)
     cycles = result.scalars().all()
     if not cycles:
         return {"status": "no_data", "cycles": []}
@@ -117,9 +132,20 @@ async def handle_save_yield_plan(
     tool_input: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
+    crop_cycle_id = uuid.UUID(tool_input["crop_cycle_id"])
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+
+    if raw_plot_id:
+        plot_id = uuid.UUID(raw_plot_id)
+    else:
+        cycle_result = await db.execute(select(CropCycle).where(CropCycle.id == crop_cycle_id))
+        cycle = cycle_result.scalar_one_or_none()
+        plot_id = cycle.growing_area_plot_id if cycle else None
+
     plan = YieldPlan(
-        crop_cycle_id=uuid.UUID(tool_input["crop_cycle_id"]),
+        crop_cycle_id=crop_cycle_id,
         growing_area_id=uuid.UUID(tool_input["growing_area_id"]),
+        growing_area_plot_id=plot_id,
         recommended_plant_quantity=tool_input["recommended_plant_quantity"],
         target_yield=tool_input["target_yield"],
         confidence_level=ConfidenceLevel(tool_input["confidence_level"]),
@@ -168,6 +194,8 @@ async def handle_get_historical_context(
     crop_id = uuid.UUID(tool_input["crop_id"])
     temperature = tool_input["temperature"]
     humidity = tool_input["humidity"]
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+    growing_area_plot_id = uuid.UUID(raw_plot_id) if raw_plot_id else None
 
     # Fetch crop name and area type for richer embedding text
     crop_result = await db.execute(select(Crop).where(Crop.id == crop_id))
@@ -189,6 +217,7 @@ async def handle_get_historical_context(
         growing_area_id=growing_area_id,
         crop_id=crop_id,
         embedding=embedding,
+        growing_area_plot_id=growing_area_plot_id,
         db=db,
     )
 
@@ -261,14 +290,26 @@ async def handle_create_alert(
     tool_input: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
+    triggering_reading_id = uuid.UUID(tool_input["triggering_reading_id"])
+    reading_result = await db.execute(
+        select(SensorReading).where(SensorReading.id == triggering_reading_id)
+    )
+    reading = reading_result.scalar_one_or_none()
+    raw_plot_id = tool_input.get("growing_area_plot_id")
+    plot_id = (
+        uuid.UUID(raw_plot_id) if raw_plot_id
+        else (reading.growing_area_plot_id if reading else None)
+    )
+
     alert = Alert(
         growing_area_id=uuid.UUID(tool_input["growing_area_id"]),
+        growing_area_plot_id=plot_id,
         crop_cycle_id=(
             uuid.UUID(tool_input["crop_cycle_id"])
             if tool_input.get("crop_cycle_id")
             else None
         ),
-        triggering_reading_id=uuid.UUID(tool_input["triggering_reading_id"]),
+        triggering_reading_id=triggering_reading_id,
         alert_type=AlertType(tool_input["alert_type"]),
         status=AlertStatus.active,
         consecutive_normal_count=0,
@@ -309,27 +350,39 @@ async def handle_send_alert_email(
     tool_input: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """
-    Send alert email via SendGrid.
-    TODO: implement SendGrid email service
-    """
     alert_id = uuid.UUID(tool_input["alert_id"])
-    result = await db.execute(select(Alert).where(Alert.id == alert_id))
-    alert = result.scalar_one_or_none()
-
+    alert_result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    alert = alert_result.scalar_one_or_none()
     if alert is None:
         return {"error": f"Alert {alert_id} not found."}
 
-    # TODO: call SendGrid service here
-    # For now, just stamp last_email_sent_at so the interval logic works
+    area_result = await db.execute(select(GrowingArea).where(GrowingArea.id == alert.growing_area_id))
+    area = area_result.scalar_one_or_none()
+    if area is None:
+        return {"error": f"Growing area {alert.growing_area_id} not found."}
+
+    owner_result = await db.execute(select(User).where(User.id == area.owner_id))
+    owner = owner_result.scalar_one_or_none()
+    if owner is None:
+        return {"error": f"Owner for growing area {area.id} not found."}
+
+    try:
+        await send_alert_email(
+            to_email=owner.email,
+            to_name=owner.full_name,
+            alert_type=alert.alert_type.value,
+            area_name=area.name,
+            assessment_summary=alert.assessment_summary or "No assessment available.",
+            created_at=alert.created_at,
+        )
+    except Exception:
+        logger.exception("Alert email failed for alert %s", alert_id)
+        return {"status": "email_failed", "alert_id": str(alert.id)}
+
     alert.last_email_sent_at = datetime.now(timezone.utc)
     await db.commit()
 
-    return {
-        "status": "not_implemented",
-        "message": "Email service not yet implemented. Timestamp updated.",
-        "alert_id": str(alert.id),
-    }
+    return {"status": "sent", "alert_id": str(alert.id), "to": owner.email}
 
 
 async def handle_log_reading_assessment(

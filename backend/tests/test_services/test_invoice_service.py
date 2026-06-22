@@ -4,8 +4,8 @@ Tests for invoice_service direct functions.
 Covers:
   - set_crop_rate creates a new rate
   - set_crop_rate deactivates the previous active rate
-  - create_draft_invoice returns None when cycle has no actual_yield
-  - create_draft_invoice returns None when no active CropRate exists
+  - generate_draft returns None when cycle has no actual_yield
+  - generate_draft returns None when no active CropRate exists
   - update_invoice updates notes
   - update_invoice returns None when invoice not found
 """
@@ -19,11 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
 from app.models.customer import Customer
-from app.models.field import GrowingArea, GrowingAreaType
+from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.invoice import CropRate, Invoice, InvoiceStatus
 from app.models.user import User
 from app.services.invoice_service import (
-    create_draft_invoice,
+    generate_draft,
     set_crop_rate,
     update_invoice,
 )
@@ -68,9 +68,24 @@ async def field(db: AsyncSession, owner_user: User) -> GrowingArea:
 
 
 @pytest_asyncio.fixture
-async def cycle_no_yield(db: AsyncSession, field: GrowingArea, corn: Crop) -> CropCycle:
+async def field_plot(db: AsyncSession, field: GrowingArea) -> GrowingAreaPlot:
+    p = GrowingAreaPlot(
+        growing_area_id=field.id,
+        owner_id=field.owner_id,
+        plot_index=0,
+        plot_type=PlotType.trial_strip,
+        is_active=True,
+    )
+    db.add(p)
+    await db.flush()
+    return p
+
+
+@pytest_asyncio.fixture
+async def cycle_no_yield(db: AsyncSession, field: GrowingArea, field_plot: GrowingAreaPlot, corn: Crop) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=field.id,
+        growing_area_plot_id=field_plot.id,
         crop_id=corn.id,
         season_year=2026,
         cycle_number=1,
@@ -84,9 +99,10 @@ async def cycle_no_yield(db: AsyncSession, field: GrowingArea, corn: Crop) -> Cr
 
 
 @pytest_asyncio.fixture
-async def cycle_with_yield(db: AsyncSession, field: GrowingArea, corn: Crop) -> CropCycle:
+async def cycle_with_yield(db: AsyncSession, field: GrowingArea, field_plot: GrowingAreaPlot, corn: Crop) -> CropCycle:
     cycle = CropCycle(
         growing_area_id=field.id,
+        growing_area_plot_id=field_plot.id,
         crop_id=corn.id,
         season_year=2026,
         cycle_number=2,
@@ -135,24 +151,27 @@ async def test_set_crop_rate_deactivates_previous(db: AsyncSession, corn: Crop):
     assert new_rate.is_active is True
 
 
-async def test_create_draft_invoice_returns_none_without_actual_yield(
+async def test_generate_draft_returns_none_without_actual_yield(
     db: AsyncSession, cycle_no_yield: CropCycle
 ):
-    result = await create_draft_invoice(cycle_no_yield.id, db)
+    result = await generate_draft(cycle_no_yield.id, db)
     assert result is None
 
 
-async def test_create_draft_invoice_returns_none_without_active_rate(
+async def test_generate_draft_creates_invoice_without_active_rate(
     db: AsyncSession, cycle_with_yield: CropCycle
 ):
-    # No CropRate in DB for this crop → returns None
-    result = await create_draft_invoice(cycle_with_yield.id, db)
-    assert result is None
+    """v1.2: invoice still created with null unit_price/total_amount when no CropRate exists."""
+    result = await generate_draft(cycle_with_yield.id, db)
+    assert result is not None
+    assert result.unit_price is None
+    assert result.total_amount is None
 
 
-async def test_update_invoice_notes(db: AsyncSession, harvest_customer: Customer, corn: Crop, field: GrowingArea):
+async def test_update_invoice_notes(db: AsyncSession, harvest_customer: Customer, corn: Crop, field: GrowingArea, field_plot: GrowingAreaPlot):
     cycle = CropCycle(
         growing_area_id=field.id,
+        growing_area_plot_id=field_plot.id,
         crop_id=corn.id,
         season_year=2026,
         cycle_number=10,
@@ -176,7 +195,7 @@ async def test_update_invoice_notes(db: AsyncSession, harvest_customer: Customer
     invoice = Invoice(
         customer_id=harvest_customer.id,
         crop_cycle_id=cycle.id,
-        rate_id=rate.id,
+        crop_rate_id=rate.id,
         quantity=1000.0,
         unit=YieldUnit.bushels,
         unit_price=5.50,

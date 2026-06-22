@@ -36,7 +36,7 @@ cp .env.example .env
 Fill in the required values in `.env`:
 - `SECRET_KEY` — any long random string for dev
 - `ANTHROPIC_API_KEY` — from platform.claude.com
-- `SENDGRID_API_KEY` — use a placeholder for dev (`SG.placeholder`)
+- `RESEND_API_KEY` — from resend.com (use a placeholder for dev)
 
 ### 3. Create and activate the virtual environment
 
@@ -63,7 +63,7 @@ python -m alembic upgrade head
 
 ```bash
 cd backend
-cp .env.example .env          # fill in SECRET_KEY, ANTHROPIC_API_KEY, SENDGRID_API_KEY
+cp .env.example .env          # fill in SECRET_KEY, ANTHROPIC_API_KEY, RESEND_API_KEY
 pip install -e ".[dev]"
 python -m alembic upgrade head
 python -m uvicorn app.main:app --reload
