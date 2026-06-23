@@ -33,6 +33,7 @@ A v1.3 release to `main` is considered **complete** when:
 - [ ] Invoice detail card has a customer dropdown; no Swagger access required to assign or change a customer on a draft invoice
 - [ ] Demo reset endpoint is implemented, tested, and validated end-to-end; demo cycles are visibly mid-season on any run date without manual seed recalculation
 - [ ] `harvest_ready` is removed from `AlertType` via migration; the alert system is anomaly-detection only
+- [ ] Lighthouse baseline audit complete across all three themes; findings list exported and handed off to v1.4
 - [ ] All v1.3 items above are merged to `main`
 
 ---
@@ -45,6 +46,13 @@ A v1.3 release to `main` is considered **complete** when:
 | 5 | Invoice customer assignment in UI | Light | Dropdown on invoice detail card; no backend schema change |
 | 6 | Demo reset endpoint | Medium | Foundational work from prior sprints is lost — rebuild and validate |
 | 7 | Alert / notification separation | Light | Single migration: drop `harvest_ready` from `AlertType` enum |
+| 8 | Lighthouse baseline audit | Light | Run Lighthouse against all three themes; export prioritized findings list for v1.4 ARIA + contrast work |
+
+### Task 8 — Lighthouse Baseline Audit
+
+Run Lighthouse (or axe DevTools) against the app in all three themes — light, dark, and client theme — and export a prioritized findings list. This is reconnaissance, not remediation. Color token adjustments and ARIA fixes land in v1.4; this task exists so v1.4 starts with a known hit list rather than a freehand page scan.
+
+Output: a findings list (Markdown or exported report) committed to the repo, covering contrast failures by theme and missing ARIA roles/labels by component. Color token findings feed back into Claude Design for design system documentation updates.
 
 ---
 
