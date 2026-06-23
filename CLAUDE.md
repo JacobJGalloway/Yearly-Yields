@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Backend:** Python 3.12, FastAPI, async SQLAlchemy 2.0 + asyncpg, PostgreSQL 16 + pgvector, Alembic, Anthropic SDK (Claude Sonnet 4.6)
 - **Frontend:** Angular 21, Angular Material 3, NgRx, Vitest
-- **Infrastructure:** Docker (PostgreSQL + pgvector), SendGrid (email), NOAA API (weather), voyage-3 (embeddings)
+- **Infrastructure:** Docker (PostgreSQL + pgvector), Resend (email), NOAA API (weather), voyage-3 (embeddings)
 
 ## Commands
 
@@ -108,7 +108,7 @@ Tests use a separate `yearly_yields_test` database. Create it once:
 ```bash
 docker exec -it yearly_yields_db psql -U user -c "CREATE DATABASE yearly_yields_test;"
 ```
-Each test runs inside a rolled-back transaction (outer connection-level savepoint in `conftest.py`). Current coverage: 338 tests, ~85% — excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
+Each test runs inside a rolled-back transaction (outer connection-level savepoint in `conftest.py`). Current coverage: 345 tests, ~84% — excluded by design: `agent/chat.py` (streaming loop), `mcp/server.py` (subprocess), `main.py` (lifespan hooks).
 
 ## Known gaps / active TODOs
 
