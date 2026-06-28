@@ -141,7 +141,7 @@ Then seed reference data (crops, customers, permissions) via `POST /api/v1/admin
 
 Crop cycle seed data is backdated so that today's date falls in the **growing phase** of each open field cycle, making the demo immediately meaningful without a time offset setting.
 
-Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted_at` so that `(today - planted_at).days` is between `seeding_days` and `seeding_days + growing_days` for each crop (see `backend/app/core/crop_phases.py` for phase day constants).
+The table below reflects the original static seed state as of **2026-04-17**. These dates become stale as time passes — they are kept here as a reference for the initial DB load only.
 
 | Field | Crop | planted_at | Phase on seed date |
 |-------|------|------------|-------------------|
@@ -153,7 +153,7 @@ Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted
 | Morristown GH2 — Bay B | Tennessee Britches Tomato | 2026-03-01 | Growing (day 18 of 80) |
 | Morristown GH2 — Bay C | Arugula Lettuce | 2026-04-01 | Growing (day 3 of 11) |
 
-The demo reset endpoint (v1.3) will replace the need to recalculate these dates manually — it rebuilds crop cycles relative to the current run date automatically. Until then, season-appropriate offsets still apply: open field cycles are constrained by planting windows, greenhouse cycles run year-round.
+**Use `POST /api/v1/admin/demo-reset` (owner token required) to rebuild cycles before any demo.** It recalculates all `planted_at` values relative to today — greenhouse plots always show varied active phases, open fields reflect the real calendar. The table above is a historical reference only.
 
 When you go to setup a fresh or wiped database and need the seed data loaded back in,
 run the following scripts in this order (all scripts are in backend folder) - 
@@ -190,11 +190,10 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 
 ## Future Features
 
-### v1.3
-- **pgvector embedding purge** — Remove voyage-3 embeddings from `pgvector` for sensor readings that have been deleted or rolled into weekly summaries, preventing the vector store from growing unboundedly.
-- **Invoice customer assignment in UI** — Draft invoices currently require Swagger to assign or change the customer. A customer dropdown on the invoice detail card would eliminate this friction for farmers.
-- **Demo reset endpoint** — `POST /api/v1/admin/demo-reset` (owner-only, disabled in production) wipes and rebuilds crop cycle data with `planted_at` recalculated relative to today, so every demo starts with cycles visibly mid-season without manual seed recalculation.
-- **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
+### v1.4
+- Lighthouse baseline audit — run against all three themes (light, dark, client); export prioritized contrast and ARIA findings for remediation
+- ARIA compliance audit — board columns, cards, icon-only buttons, skip-nav across three-theme surface area
+- Color contrast audit (WCAG AA) — light, dark, and client theme
 
 ### Possible Future Features
 - **Customer-scoped crop rates** — `CropRate` currently applies globally per crop. Needs a `customer_id` FK so pricing is per-customer per-crop (e.g. international buyers pay differently than local market customers). Required before unit price and total populate correctly on auto-generated invoices.
@@ -204,4 +203,5 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 - **Configurable crop phase day admin UI** — Seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
 - **IoT reading source** — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
 - **SMS alert notifications** — Send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing email delivery.
+- **Sortable table columns** — Crop Cycles list (and other data tables) are currently unsorted; adding column-header sort would help operators quickly find cycles by phase, planted date, or area name.
 

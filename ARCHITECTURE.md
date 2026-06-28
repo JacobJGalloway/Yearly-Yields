@@ -31,7 +31,7 @@ A v1.3 release to `main` is considered **complete** when:
 
 - [x] pgvector embedding purge is hooked into the existing deletion and weekly rollup pipeline; the vector store no longer grows unboundedly from deleted or summarized sensor readings
 - [x] Invoice detail card has a customer dropdown; no Swagger access required to assign or change a customer on a draft invoice
-- [ ] Demo reset endpoint is implemented, tested, and validated end-to-end; demo cycles are visibly mid-season on any run date without manual seed recalculation
+- [x] Demo reset endpoint is implemented, tested, and validated end-to-end; demo cycles are visibly mid-season on any run date without manual seed recalculation
 - [x] `harvest_ready` is removed from `AlertType` via migration; the alert system is anomaly-detection only
 - [ ] Lighthouse baseline audit complete across all three themes; findings list exported and handed off to v1.4
 - [ ] All v1.3 items above are merged to `main`
@@ -172,7 +172,7 @@ These are points in the sprint where Claude Code should **pause and surface** ra
 
 | Checkpoint | Feature | What to surface |
 |------------|---------|-----------------|
-| Demo seed phase distribution | Demo Reset (#6) | Surface the proposed `planted_at` offset constants and greenhouse plot phase distribution before seeding (open fields reflect real calendar state; greenhouse plots carry artificial offsets for active monitoring demo), so the owner can confirm the cycle phases look right before presenting. |
+| ~~Demo seed phase distribution~~ | Demo Reset (#6) | **Resolved.** Owner confirmed: GH1 Bay A (harvest d14), GH1 Bay B (growing), GH2 Bay A (harvest d24), GH2 Bay B (growing), GH2 Bay C (arugula harvest d12/15 — terminal harvest ready for demo arc). Open fields calendar-honest. |
 | Customer dropdown behavior on finalized invoices | Invoice UI (#5) | If there is ambiguity about what "finalized" means in the current model, surface the question with a specific example rather than choosing an approach silently. |
 | Orphaned embedding discovery | pgvector Purge (#4) | If the audit of existing embeddings reveals a larger-than-expected orphan count or unexpected embedding types, surface the finding before purging. |
 
