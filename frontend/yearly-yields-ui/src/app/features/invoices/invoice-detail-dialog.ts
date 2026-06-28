@@ -8,10 +8,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Observable } from 'rxjs';
+import { Customer } from '../../core/services/customer.service';
 import { Invoice, InvoiceService, InvoiceStatus } from '../../core/services/invoice.service';
 
 export interface InvoiceDetailDialogData {
   invoice: Invoice;
+  customers: Customer[];
 }
 
 const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
@@ -45,9 +47,25 @@ const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
         <span class="value">\${{ invoice.unit_price | number:'1.2-2' }} / {{ invoice.unit }}</span>
         <span class="label">Current Status</span>
         <span class="value status-{{ invoice.status }}">{{ invoice.status | titlecase }}</span>
+        @if (invoice.status !== 'draft') {
+          <span class="label">Customer</span>
+          <span class="value">{{ customerName(invoice.customer_id) }}</span>
+        }
       </div>
 
       <form [formGroup]="form" class="dialog-form">
+        @if (invoice.status === 'draft') {
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Customer</mat-label>
+            <mat-select formControlName="customer_id">
+              <mat-option [value]="null">— unassigned —</mat-option>
+              @for (c of customers; track c.id) {
+                <mat-option [value]="c.id">{{ c.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Quantity ({{ invoice.unit }})</mat-label>
           <input matInput type="number" formControlName="quantity" />
@@ -101,15 +119,22 @@ export class InvoiceDetailDialogComponent {
   private fb = inject(FormBuilder);
 
   invoice = this.data.invoice;
+  customers = this.data.customers;
   nextStatuses = TRANSITIONS[this.invoice.status];
   saving = false;
   downloading = false;
 
   form = this.fb.group({
+    customer_id: [this.invoice.customer_id ?? null as string | null],
     quantity: [this.invoice.quantity],
     notes: [this.invoice.notes ?? ''],
     status: [null as InvoiceStatus | null],
   });
+
+  customerName(id: string | null): string {
+    if (!id) return '—';
+    return this.customers.find(c => c.id === id)?.name ?? '—';
+  }
 
   downloadPdf(): void {
     this.downloading = true;
@@ -127,6 +152,7 @@ export class InvoiceDetailDialogComponent {
     const v = this.form.getRawValue();
 
     const update$ = this.invoiceService.update(this.invoice.id, {
+      ...(this.invoice.status === 'draft' && v.customer_id ? { customer_id: v.customer_id } : {}),
       quantity: v.quantity ?? undefined,
       notes: v.notes || undefined,
     });
