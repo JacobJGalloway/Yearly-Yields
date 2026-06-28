@@ -32,7 +32,7 @@ A v1.3 release to `main` is considered **complete** when:
 - [ ] pgvector embedding purge is hooked into the existing deletion and weekly rollup pipeline; the vector store no longer grows unboundedly from deleted or summarized sensor readings
 - [ ] Invoice detail card has a customer dropdown; no Swagger access required to assign or change a customer on a draft invoice
 - [ ] Demo reset endpoint is implemented, tested, and validated end-to-end; demo cycles are visibly mid-season on any run date without manual seed recalculation
-- [ ] `harvest_ready` is removed from `AlertType` via migration; the alert system is anomaly-detection only
+- [x] `harvest_ready` is removed from `AlertType` via migration; the alert system is anomaly-detection only
 - [ ] Lighthouse baseline audit complete across all three themes; findings list exported and handed off to v1.4
 - [ ] All v1.3 items above are merged to `main`
 
@@ -124,9 +124,11 @@ Foundational work toward this feature was scoped in v1.1 and v1.2 but did not la
 - **Idempotent:** Safe to run multiple times. Each run produces the same relative board state regardless of when it is run.
 
 ### Date-Relative Seeding Logic
-- Crop cycles should appear to be at different mid-season phases depending on crop type — not all cycles at the same stage
+- **Open fields** reflect the real calendar — if the demo runs in winter, open field cycles appear fallow. No artificial offset. This demonstrates natural seasonal tracking.
+- **Greenhouse plots** carry date-relative `planted_at` offsets so cycles always appear at varied active phases regardless of demo run date. This is where anomaly alerts, phase transitions, and monitoring activity are demonstrated.
+- Phase offsets across greenhouse plots should be spread across stages — not all plots at the same phase
 - `planted_at` offsets should be defined as named constants or a config block, not scattered through seed logic
-- The endpoint should return a summary of what was seeded (cycle counts, date ranges, phase distribution) so the presenter can confirm board state before a demo
+- The endpoint should return a summary of what was seeded (cycle counts, date ranges, phase distribution per area) so the presenter can confirm the greenhouse plots are in the right phases before the demo
 
 ### Production Safety
 - The endpoint must be explicitly disabled in production — a feature flag, environment check, or router exclusion, not just an auth check alone
@@ -170,7 +172,7 @@ These are points in the sprint where Claude Code should **pause and surface** ra
 
 | Checkpoint | Feature | What to surface |
 |------------|---------|-----------------|
-| Demo seed phase distribution | Demo Reset (#6) | Surface the proposed `planted_at` offset constants and phase distribution before seeding, so the owner can confirm the board will look right for the demo scenario. |
+| Demo seed phase distribution | Demo Reset (#6) | Surface the proposed `planted_at` offset constants and greenhouse plot phase distribution before seeding (open fields reflect real calendar state; greenhouse plots carry artificial offsets for active monitoring demo), so the owner can confirm the cycle phases look right before presenting. |
 | Customer dropdown behavior on finalized invoices | Invoice UI (#5) | If there is ambiguity about what "finalized" means in the current model, surface the question with a specific example rather than choosing an approach silently. |
 | Orphaned embedding discovery | pgvector Purge (#4) | If the audit of existing embeddings reveals a larger-than-expected orphan count or unexpected embedding types, surface the finding before purging. |
 
