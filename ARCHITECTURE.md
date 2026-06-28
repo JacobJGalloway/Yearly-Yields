@@ -33,7 +33,7 @@ A v1.3 release to `main` is considered **complete** when:
 - [x] Invoice detail card has a customer dropdown; no Swagger access required to assign or change a customer on a draft invoice
 - [x] Demo reset endpoint is implemented, tested, and validated end-to-end; demo cycles are visibly mid-season on any run date without manual seed recalculation
 - [x] `harvest_ready` is removed from `AlertType` via migration; the alert system is anomaly-detection only
-- [ ] Lighthouse baseline audit complete across all three themes; findings list exported and handed off to v1.4
+- [x] Lighthouse baseline audit complete across all three themes; findings list exported and handed off to v1.4
 - [ ] All v1.3 items above are merged to `main`
 
 ---
