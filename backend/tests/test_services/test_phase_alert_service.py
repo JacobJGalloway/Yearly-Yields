@@ -6,6 +6,7 @@ Covers:
   - Does NOT create any alert for a cycle in harvest phase
   - Skips cycle that has not yet reached harvest phase
   - Skips inactive (fallow) cycles entirely
+  - run_phase_check opens its own session without raising
 """
 
 from datetime import date, timedelta
@@ -19,7 +20,7 @@ from app.models.alert import Alert
 from app.models.crop import Crop, CropCycle, CropCycleStatus, YieldUnit
 from app.models.field import GrowingArea, GrowingAreaPlot, GrowingAreaType, PlotType
 from app.models.user import User
-from app.services.phase_alert_service import _check_all_cycles
+from app.services.phase_alert_service import _check_all_cycles, run_phase_check
 
 pytestmark = pytest.mark.asyncio
 
@@ -130,3 +131,8 @@ async def test_skips_fallow_cycle(
 
     result = await db.execute(select(Alert).where(Alert.crop_cycle_id == cycle.id))
     assert result.scalar_one_or_none() is None
+
+
+async def test_run_phase_check_runs_without_error():
+    """run_phase_check opens its own session and completes without raising."""
+    await run_phase_check()

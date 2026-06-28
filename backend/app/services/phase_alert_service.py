@@ -1,9 +1,9 @@
 """
-Phase notification stub — daily check for crop cycles that have entered harvest phase.
+Phase check — daily scan for crop cycles that have entered harvest phase.
 
 Runs once on startup and then daily via the phase check loop in main.py.
-Currently logs only. A proper notification/event service (v1.2) will replace
-the log lines with push notifications or in-app events.
+Logs only. Phase transition notifications are a future feature; this service
+is intentionally not the alert system.
 """
 
 import logging
@@ -51,7 +51,7 @@ async def _check_all_cycles(db: AsyncSession) -> None:
         days_in_harvest = days_in - (pd.seeding_days + pd.growing_days)
         logger.info(
             "Harvest-ready: %s in %s — day %d of cycle (%d day(s) in harvest phase). "
-            "Notification service (v1.2) will surface this event.",
+            "No alert raised — harvest readiness is a human judgment call.",
             crop_name, area_name, days_in, days_in_harvest,
         )
         harvest_ready_count += 1

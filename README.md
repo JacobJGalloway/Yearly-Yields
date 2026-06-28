@@ -141,7 +141,7 @@ Then seed reference data (crops, customers, permissions) via `POST /api/v1/admin
 
 Crop cycle seed data is backdated so that today's date falls in the **growing phase** of each open field cycle, making the demo immediately meaningful without a time offset setting.
 
-Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted_at` so that `(today - planted_at).days` is between `seeding_days` and `seeding_days + growing_days` for each crop (see `backend/app/core/crop_phases.py` for phase day constants).
+The table below reflects the original static seed state as of **2026-04-17**. These dates become stale as time passes — they are kept here as a reference for the initial DB load only.
 
 | Field | Crop | planted_at | Phase on seed date |
 |-------|------|------------|-------------------|
@@ -153,7 +153,9 @@ Seeded around **2026-04-17**. To recreate on a future date, recalculate `planted
 | Morristown GH2 — Bay B | Tennessee Britches Tomato | 2026-03-01 | Growing (day 18 of 80) |
 | Morristown GH2 — Bay C | Arugula Lettuce | 2026-04-01 | Growing (day 3 of 11) |
 
-When you go to setup a fresh or wiped database and need the seed data loaded back in, 
+**Use `POST /api/v1/admin/demo-reset` (owner token required) to rebuild cycles before any demo.** It recalculates all `planted_at` values relative to today — greenhouse plots always show varied active phases, open fields reflect the real calendar. The table above is a historical reference only.
+
+When you go to setup a fresh or wiped database and need the seed data loaded back in,
 run the following scripts in this order (all scripts are in backend folder) - 
 1) seed_demo_farms.py
 2) seed_historical_harvests.py
@@ -188,15 +190,23 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 
 ## Future Features
 
-### v1.3
-- **pgvector embedding purge** — Remove voyage-3 embeddings from `pgvector` for sensor readings that have been deleted or rolled into weekly summaries, preventing the vector store from growing unboundedly.
-- **Invoice customer assignment in UI** — Draft invoices currently require Swagger to assign or change the customer. A customer dropdown on the invoice detail card would eliminate this friction for farmers.
-- **Demo reset endpoint** — `POST /api/v1/admin/demo-reset` (owner-only, disabled in production) wipes and rebuilds crop cycle data with `planted_at` recalculated relative to today, so every demo starts with cycles visibly mid-season without manual seed recalculation.
-- **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
+### v1.4
+Findings from the v1.3 accessibility audit (`docs/accessibility-audit-v1.3.md`) drive this sprint. Priority order matches the audit doc.
+
+- **Harvest gold foreground policy** — `#C9A227` fails WCAG AA as a text/icon color on every surface (1.98:1 on field green, 2.07:1 on parchment, 2.42:1 on white). It passes as a *background* with black text (8.33:1). v1.4 enforces harvest gold as background-only: nav icons and text switch to `--yy-white-board` on the field green sidebar.
+- **`aria-label` on all icon-only buttons** — all table action buttons and the toolbar logout button are missing accessible names; `matTooltip` is not a substitute for screen readers.
+- **Logo image → semantic button** — the theme-picker trigger is a clickable `<img>`, which is not keyboard-focusable. Wrap in a `<button>` with `aria-label`.
+- **Skip-navigation link** — add standard skip-nav at the top of the shell so keyboard users can bypass the sidenav on every page.
+- **Mobile nav `aria-label`** — nav items hide their text label in mobile mode without a fallback accessible name on the `<a>` element.
+- **Full browser re-audit with axe DevTools** after fixes to catch focus order, form label associations, dialog ARIA, and M3-generated tonal role contrast (not auditable from static CSS).
 
 ### Possible Future Features
+- **Customer-scoped crop rates** — `CropRate` currently applies globally per crop. Needs a `customer_id` FK so pricing is per-customer per-crop (e.g. international buyers pay differently than local market customers). Required before unit price and total populate correctly on auto-generated invoices.
+- **Crop rate seeding** — No active `CropRates` exist in the DB; `generate_draft` silently bails without them. Unit price is now directly editable on draft invoices as a workaround; seed rates per crop (paired with customer once customer-scoped rates land) to automate pricing on invoice creation.
+- **Indiscriminate crop invoicing** — `log_harvest_pick` updates `last_harvest_date` only; it does not generate a draft invoice. Tomatoes (and eventually grapes) need a pick-triggered draft invoice rather than waiting for cycle close, since the vine cycle never terminates on a single harvest.
 - **User-to-growing-area assignment model** — Allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
 - **Configurable crop phase day admin UI** — Seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
 - **IoT reading source** — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
 - **SMS alert notifications** — Send a text message with a deep link to the alert detail when an anomaly is first detected, supplementing the existing email delivery.
+- **Sortable table columns** — Crop Cycles list (and other data tables) are currently unsorted; adding column-header sort would help operators quickly find cycles by phase, planted date, or area name.
 

@@ -25,11 +25,9 @@ import { FieldService, GrowingArea } from '../../core/services/field.service';
   template: `
     <div class="page-header">
       <h2>Alerts</h2>
-      <!-- v1.1: re-enable after harvest_ready enum cleanup and resolved alert seeding
       <mat-slide-toggle [(ngModel)]="activeOnly" (ngModelChange)="load()">
         Active only
       </mat-slide-toggle>
-      -->
     </div>
 
     <table mat-table [dataSource]="alerts()" class="alerts-table mat-elevation-z1">

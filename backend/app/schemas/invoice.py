@@ -30,6 +30,7 @@ class CropRateRead(BaseModel):
 class InvoiceUpdate(BaseModel):
     customer_id: Optional[uuid.UUID] = None
     quantity: Optional[float] = None
+    unit_price: Optional[float] = None
     notes: Optional[str] = None
 
 

@@ -145,7 +145,7 @@ export class InvoicesComponent implements OnInit {
 
   openDetail(invoice: Invoice): void {
     const ref = this.dialog.open(InvoiceDetailDialogComponent, {
-      data: { invoice },
+      data: { invoice, customers: this.customers() },
     });
     ref.afterClosed().subscribe(updated => {
       if (updated) this.load();

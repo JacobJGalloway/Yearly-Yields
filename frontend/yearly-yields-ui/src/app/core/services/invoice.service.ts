@@ -7,7 +7,7 @@ export type YieldUnit = 'bushels' | 'pounds' | 'tons' | 'units';
 
 export interface Invoice {
   id: string;
-  customer_id: string;
+  customer_id: string | null;
   crop_cycle_id: string;
   rate_id: string;
   quantity: number;
@@ -24,7 +24,9 @@ export interface Invoice {
 
 export interface InvoiceUpdate {
   quantity?: number;
+  unit_price?: number;
   notes?: string;
+  customer_id?: string;
 }
 
 @Injectable({ providedIn: 'root' })
