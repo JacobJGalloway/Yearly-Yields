@@ -375,6 +375,24 @@ async def draft_invoice(db: AsyncSession, corn_cycle: CropCycle, harvest_custome
     return invoice
 
 
+@pytest_asyncio.fixture
+async def sent_invoice(db: AsyncSession, corn_cycle: CropCycle, harvest_customer: Customer, corn_rate: CropRate) -> Invoice:
+    invoice = Invoice(
+        customer_id=harvest_customer.id,
+        crop_cycle_id=corn_cycle.id,
+        crop_rate_id=corn_rate.id,
+        quantity=5000.0,
+        unit=YieldUnit.bushels,
+        unit_price=5.50,
+        total_amount=27500.0,
+        status=InvoiceStatus.sent,
+        invoice_date=date(2026, 8, 15),
+    )
+    db.add(invoice)
+    await db.flush()
+    return invoice
+
+
 @pytest.mark.asyncio
 async def test_invoice_draft_to_sent(
     client: AsyncClient, owner_token: str, draft_invoice: Invoice
@@ -499,6 +517,66 @@ async def test_update_invoice_not_found_returns_404(
         headers=auth_headers(owner_token),
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_send_already_sent_invoice_returns_409(
+    client: AsyncClient, owner_token: str, sent_invoice: Invoice
+):
+    response = await client.post(
+        f"/api/v1/invoices/{sent_invoice.id}/send",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_pay_draft_invoice_returns_409(
+    client: AsyncClient, owner_token: str, draft_invoice: Invoice
+):
+    response = await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/pay",
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_farmer_cannot_void_sent_invoice_returns_403(
+    client: AsyncClient, farmer_token: str, sent_invoice: Invoice
+):
+    response = await client.post(
+        f"/api/v1/invoices/{sent_invoice.id}/void",
+        headers=auth_headers(farmer_token),
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_hired_hand_cannot_void_invoice_returns_403(
+    client: AsyncClient, hired_hand_token: str, draft_invoice: Invoice
+):
+    response = await client.post(
+        f"/api/v1/invoices/{draft_invoice.id}/void",
+        headers=auth_headers(hired_hand_token),
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_invoice_customer_and_unit_price_update(
+    client: AsyncClient, owner_token: str, draft_invoice: Invoice, harvest_customer: Customer
+):
+    response = await client.patch(
+        f"/api/v1/invoices/{draft_invoice.id}",
+        json={"customer_id": str(harvest_customer.id), "unit_price": 6.00},
+        headers=auth_headers(owner_token),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["customer_id"] == str(harvest_customer.id)
+    assert data["unit_price"] == 6.00
+    assert data["total_amount"] == round(draft_invoice.quantity * 6.00, 2)
 
 
 # ── PDF endpoint ──────────────────────────────────────────────────────────────

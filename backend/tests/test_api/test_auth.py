@@ -12,6 +12,7 @@ Covers:
 """
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -196,10 +197,11 @@ async def test_forgot_password_known_user_creates_token(
     client: AsyncClient, db: AsyncSession, owner_user: User
 ):
     """Known active user gets a PasswordResetToken in the database."""
-    response = await client.post(
-        "/api/v1/auth/forgot-password",
-        json={"email": "owner@test.com"},
-    )
+    with patch("app.services.email_service.send_password_reset_email", new=AsyncMock(return_value=None)):
+        response = await client.post(
+            "/api/v1/auth/forgot-password",
+            json={"email": "owner@test.com"},
+        )
     assert response.status_code == 204
 
     result = await db.execute(

@@ -78,6 +78,17 @@ async def test_create_plot_hired_hand_forbidden(
     assert r.status_code == 403
 
 
+async def test_create_plot_index_zero_rejected_by_schema(
+    client: AsyncClient, owner_token: str, greenhouse_area: GrowingArea
+):
+    r = await client.post(
+        f"/api/v1/fields/{greenhouse_area.id}/plots/",
+        headers=auth_headers(owner_token),
+        json={"plot_index": 0, "name": "Sentinel", "plot_type": "dwc_row", "area_sqft": 500.0},
+    )
+    assert r.status_code == 422
+
+
 async def test_list_plots_empty(client: AsyncClient, owner_token: str, greenhouse_area: GrowingArea):
     r = await client.get(
         f"/api/v1/fields/{greenhouse_area.id}/plots/",

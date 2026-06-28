@@ -419,14 +419,22 @@ async def test_handle_update_alert_not_found(db: AsyncSession):
 # ── Send alert email ──────────────────────────────────────────────────────────
 
 async def test_handle_send_alert_email_success(db: AsyncSession, active_alert: Alert):
-    result = await handle_send_alert_email({"alert_id": str(active_alert.id)}, db)
-    assert result["status"] == "not_implemented"
+    with patch("app.agent.tool_handlers.send_alert_email", new=AsyncMock(return_value=None)):
+        result = await handle_send_alert_email({"alert_id": str(active_alert.id)}, db)
+    assert result["status"] == "sent"
     assert result["alert_id"] == str(active_alert.id)
 
 
 async def test_handle_send_alert_email_not_found(db: AsyncSession):
     result = await handle_send_alert_email({"alert_id": str(uuid.uuid4())}, db)
     assert "error" in result
+
+
+async def test_handle_send_alert_email_send_failure(db: AsyncSession, active_alert: Alert):
+    with patch("app.agent.tool_handlers.send_alert_email", new=AsyncMock(side_effect=Exception("SMTP error"))):
+        result = await handle_send_alert_email({"alert_id": str(active_alert.id)}, db)
+    assert result["status"] == "email_failed"
+    assert result["alert_id"] == str(active_alert.id)
 
 
 # ── Log reading assessment ────────────────────────────────────────────────────
