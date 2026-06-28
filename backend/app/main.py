@@ -352,6 +352,12 @@ async def _purge_loop() -> None:
             await _purge_old_readings()
         except Exception:
             logger.exception("Nightly sensor reading purge failed")
+        # Purge historical summaries (pgvector embeddings) on the same nightly cycle
+        # so orphaned embeddings are removed alongside the readings that sourced them.
+        try:
+            await _purge_old_historical_summaries()
+        except Exception:
+            logger.exception("Nightly historical summary (embedding) purge failed")
         if _should_summarize_today():
             try:
                 await _summarize_old_readings()
@@ -362,10 +368,6 @@ async def _purge_loop() -> None:
                 await _purge_old_weekly_summaries()
             except Exception:
                 logger.exception("Year-end weekly summary purge failed")
-            try:
-                await _purge_old_historical_summaries()
-            except Exception:
-                logger.exception("Year-end historical summary purge failed")
         await asyncio.sleep(settings.PURGE_INTERVAL_HOURS * 3600)
 
 

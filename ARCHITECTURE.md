@@ -29,7 +29,7 @@
 
 A v1.3 release to `main` is considered **complete** when:
 
-- [ ] pgvector embedding purge is hooked into the existing deletion and weekly rollup pipeline; the vector store no longer grows unboundedly from deleted or summarized sensor readings
+- [x] pgvector embedding purge is hooked into the existing deletion and weekly rollup pipeline; the vector store no longer grows unboundedly from deleted or summarized sensor readings
 - [x] Invoice detail card has a customer dropdown; no Swagger access required to assign or change a customer on a draft invoice
 - [ ] Demo reset endpoint is implemented, tested, and validated end-to-end; demo cycles are visibly mid-season on any run date without manual seed recalculation
 - [x] `harvest_ready` is removed from `AlertType` via migration; the alert system is anomaly-detection only

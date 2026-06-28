@@ -197,6 +197,9 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 - **Alert/notification separation** — Remove `harvest_ready` from `AlertType` (alert system is anomaly-detection only). Drop the enum value via migration. Phase transition signals (harvest readiness, etc.) belong in a separate notification/event service.
 
 ### Possible Future Features
+- **Customer-scoped crop rates** — `CropRate` currently applies globally per crop. Needs a `customer_id` FK so pricing is per-customer per-crop (e.g. international buyers pay differently than local market customers). Required before unit price and total populate correctly on auto-generated invoices.
+- **Crop rate seeding** — No active `CropRates` exist in the DB; `generate_draft` silently bails without them. Unit price is now directly editable on draft invoices as a workaround; seed rates per crop (paired with customer once customer-scoped rates land) to automate pricing on invoice creation.
+- **Indiscriminate crop invoicing** — `log_harvest_pick` updates `last_harvest_date` only; it does not generate a draft invoice. Tomatoes (and eventually grapes) need a pick-triggered draft invoice rather than waiting for cycle close, since the vine cycle never terminates on a single harvest.
 - **User-to-growing-area assignment model** — Allows farmer-scoped user list views (currently farmers see all users; scoping requires a join table linking users to specific growing areas they are assigned to work).
 - **Configurable crop phase day admin UI** — Seeding/growing/harvest day breakdowns and crop-specific sub-phase definitions are currently product-owned constants; future feature allows per-farm overrides via settings.
 - **IoT reading source** — `sensor` covers real device POSTs today. When a pilot client deploys hardware, add a named `IoT` source tied to device identity and registration for audit and traceability.
