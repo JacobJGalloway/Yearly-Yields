@@ -191,9 +191,14 @@ Weekly summaries store per-area averages for temperature, humidity, pH, wind spe
 ## Future Features
 
 ### v1.4
-- Lighthouse baseline audit — run against all three themes (light, dark, client); export prioritized contrast and ARIA findings for remediation
-- ARIA compliance audit — board columns, cards, icon-only buttons, skip-nav across three-theme surface area
-- Color contrast audit (WCAG AA) — light, dark, and client theme
+Findings from the v1.3 accessibility audit (`docs/accessibility-audit-v1.3.md`) drive this sprint. Priority order matches the audit doc.
+
+- **Harvest gold foreground policy** — `#C9A227` fails WCAG AA as a text/icon color on every surface (1.98:1 on field green, 2.07:1 on parchment, 2.42:1 on white). It passes as a *background* with black text (8.33:1). v1.4 enforces harvest gold as background-only: nav icons and text switch to `--yy-white-board` on the field green sidebar.
+- **`aria-label` on all icon-only buttons** — all table action buttons and the toolbar logout button are missing accessible names; `matTooltip` is not a substitute for screen readers.
+- **Logo image → semantic button** — the theme-picker trigger is a clickable `<img>`, which is not keyboard-focusable. Wrap in a `<button>` with `aria-label`.
+- **Skip-navigation link** — add standard skip-nav at the top of the shell so keyboard users can bypass the sidenav on every page.
+- **Mobile nav `aria-label`** — nav items hide their text label in mobile mode without a fallback accessible name on the `<a>` element.
+- **Full browser re-audit with axe DevTools** after fixes to catch focus order, form label associations, dialog ARIA, and M3-generated tonal role contrast (not auditable from static CSS).
 
 ### Possible Future Features
 - **Customer-scoped crop rates** — `CropRate` currently applies globally per crop. Needs a `customer_id` FK so pricing is per-customer per-crop (e.g. international buyers pay differently than local market customers). Required before unit price and total populate correctly on auto-generated invoices.
