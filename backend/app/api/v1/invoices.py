@@ -59,6 +59,7 @@ async def update_invoice_endpoint(
         db=db,
         customer_id=payload.customer_id,
         quantity=payload.quantity,
+        unit_price=payload.unit_price,
         notes=payload.notes,
     )
     if invoice is None:

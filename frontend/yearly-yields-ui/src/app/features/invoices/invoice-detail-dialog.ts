@@ -71,6 +71,13 @@ const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
           <input matInput type="number" formControlName="quantity" />
         </mat-form-field>
 
+        @if (invoice.status === 'draft') {
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Unit Price ($ / {{ invoice.unit }})</mat-label>
+            <input matInput type="number" step="0.01" formControlName="unit_price" />
+          </mat-form-field>
+        }
+
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Notes</mat-label>
           <textarea matInput formControlName="notes" rows="3"></textarea>
@@ -127,6 +134,7 @@ export class InvoiceDetailDialogComponent {
   form = this.fb.group({
     customer_id: [this.invoice.customer_id ?? null as string | null],
     quantity: [this.invoice.quantity],
+    unit_price: [this.invoice.unit_price ?? null as number | null],
     notes: [this.invoice.notes ?? ''],
     status: [null as InvoiceStatus | null],
   });
@@ -153,6 +161,7 @@ export class InvoiceDetailDialogComponent {
 
     const update$ = this.invoiceService.update(this.invoice.id, {
       ...(this.invoice.status === 'draft' && v.customer_id ? { customer_id: v.customer_id } : {}),
+      ...(this.invoice.status === 'draft' && v.unit_price != null ? { unit_price: v.unit_price } : {}),
       quantity: v.quantity ?? undefined,
       notes: v.notes || undefined,
     });

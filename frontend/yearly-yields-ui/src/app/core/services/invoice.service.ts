@@ -24,6 +24,7 @@ export interface Invoice {
 
 export interface InvoiceUpdate {
   quantity?: number;
+  unit_price?: number;
   notes?: string;
   customer_id?: string;
 }

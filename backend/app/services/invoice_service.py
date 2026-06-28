@@ -227,11 +227,12 @@ async def update_invoice(
     db: AsyncSession,
     customer_id: Optional[uuid.UUID] = None,
     quantity: Optional[float] = None,
+    unit_price: Optional[float] = None,
     notes: Optional[str] = None,
 ) -> Optional[Invoice]:
     """
-    Update a draft invoice. Farmers can reassign the customer, adjust quantity, and edit notes.
-    Recalculates total_amount if quantity changes and unit_price is set.
+    Update a draft invoice. Farmers can reassign the customer, adjust quantity, set unit price,
+    and edit notes. Recalculates total_amount whenever quantity or unit_price changes.
     """
     result = await db.execute(select(Invoice).where(Invoice.id == invoice_id))
     invoice = result.scalar_one_or_none()
@@ -243,8 +244,13 @@ async def update_invoice(
 
     if quantity is not None:
         invoice.quantity = quantity
-        if invoice.unit_price is not None:
-            invoice.total_amount = round(quantity * invoice.unit_price, 2)
+
+    if unit_price is not None:
+        invoice.unit_price = unit_price
+
+    effective_price = invoice.unit_price
+    if effective_price is not None:
+        invoice.total_amount = round(invoice.quantity * effective_price, 2)
 
     if notes is not None:
         invoice.notes = notes
