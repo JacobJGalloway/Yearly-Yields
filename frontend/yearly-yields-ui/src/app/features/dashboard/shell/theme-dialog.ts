@@ -29,6 +29,14 @@ import { AppTheme } from '../../../core/services/theme.service';
   styles: [`
     .theme-options { display: flex; flex-direction: column; gap: 8px; min-width: 240px; padding-top: 8px; }
     button.active { border-color: var(--mat-sys-primary); color: var(--mat-sys-primary); font-weight: 600; }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. Border-color is unaffected —
+       3:1 non-text contrast requirement, which 4.10:1 already clears. */
+    :host-context(.app-theme-default) button.active {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class ThemeDialogComponent {

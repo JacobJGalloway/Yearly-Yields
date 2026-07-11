@@ -62,12 +62,13 @@ import { UserDialogComponent } from './user-dialog';
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let u">
           @if (canEdit(u)) {
-            <button mat-icon-button matTooltip="Edit" (click)="openEdit(u)">
+            <button mat-icon-button matTooltip="Edit" aria-label="Edit user" (click)="openEdit(u)">
               <mat-icon>edit</mat-icon>
             </button>
             @if (u.id !== currentUser()?.id) {
               <button mat-icon-button
                 [matTooltip]="u.is_active ? 'Deactivate' : 'Reactivate'"
+                [attr.aria-label]="u.is_active ? 'Deactivate user' : 'Reactivate user'"
                 (click)="toggleActive(u)">
                 <mat-icon>{{ u.is_active ? 'person_off' : 'person' }}</mat-icon>
               </button>
@@ -89,6 +90,14 @@ import { UserDialogComponent } from './user-dialog';
     .role-owner { color: var(--mat-sys-primary); font-weight: 500; }
     .role-farmer { color: var(--mat-sys-on-surface); font-weight: 500; }
     .role-hired_hand { color: var(--mat-sys-on-surface-variant); }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .status-active,
+    :host-context(.app-theme-default) .role-owner {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class UsersComponent implements OnInit {

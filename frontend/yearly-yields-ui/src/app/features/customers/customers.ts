@@ -52,11 +52,12 @@ import { CustomerDialogComponent } from './customer-dialog';
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let c">
-          <button mat-icon-button matTooltip="Edit" (click)="openDialog(c)">
+          <button mat-icon-button matTooltip="Edit" aria-label="Edit customer" (click)="openDialog(c)">
             <mat-icon>edit</mat-icon>
           </button>
           <button mat-icon-button
             [matTooltip]="c.is_active ? 'Deactivate' : 'Reactivate'"
+            [attr.aria-label]="c.is_active ? 'Deactivate customer' : 'Reactivate customer'"
             (click)="toggleActive(c)">
             <mat-icon>{{ c.is_active ? 'person_off' : 'person' }}</mat-icon>
           </button>
@@ -78,6 +79,13 @@ import { CustomerDialogComponent } from './customer-dialog';
     .status-active { color: var(--mat-sys-primary); font-weight: 500; }
     .status-inactive { color: var(--mat-sys-on-surface-variant); }
     .empty-state { color: var(--mat-sys-on-surface-variant); margin-top: 2em; text-align: center; }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .status-active {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class CustomersComponent implements OnInit {

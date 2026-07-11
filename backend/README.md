@@ -59,43 +59,59 @@ pip install -e ".[dev]"
 python -m alembic upgrade head
 ```
 
-## Getting Started
-
-```bash
-cd backend
-cp .env.example .env          # fill in SECRET_KEY, ANTHROPIC_API_KEY, RESEND_API_KEY
-pip install -e ".[dev]"
-python -m alembic upgrade head
-python -m uvicorn app.main:app --reload
-```
-
-## Starting the dev server
-
-From `backend/` with the venv active:
+### 6. Start the dev server
 
 ```powershell
 python -m uvicorn app.main:app --reload
 ```
 
-API is available at: http://127.0.0.1:8000  
+API is available at: http://127.0.0.1:8000
 Swagger UI: http://127.0.0.1:8000/docs
+
+## Restarting the dev server
+
+Once first-time setup is done, subsequent restarts only need the database up and the venv active.
+
+### 1. Check the database is running
+
+From the **project root**:
+
+```powershell
+docker compose ps
+```
+
+If `yearly_yields_db` isn't listed as `(healthy)`:
+
+```powershell
+docker compose up -d
+```
+
+### 2. Confirm the venv is active
+
+Your prompt should already show `(.venv)`. If it doesn't:
+
+```powershell
+cd backend
+.venv\Scripts\activate
+```
+
+To double-check `python` is resolving to the project venv and not a global install:
+
+```powershell
+Get-Command python
+```
+
+The `Source` path should point into `...\Yearly-Yields\backend\.venv\Scripts\python.exe`. If it points anywhere else (e.g. a Microsoft Store or global Python path), the venv isn't active — activate it before continuing.
+
+### 3. Start the server
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
 
 ## Stopping the dev server
 
-Press **Ctrl+C** in the terminal running uvicorn. This may take multiple attempts as you have to hit the keystroke between polling calls.
-
-## Subsequent startups
-
-After first-time setup, you only need:
-
-```powershell
-# 1. Start the database (if not already running)
-docker compose up -d       # run from project root
-
-# 2. Activate venv and start the server (from backend/)
-.venv\Scripts\activate
-python -m uvicorn app.main:app --reload
-```
+Press **Ctrl+C** in the terminal running uvicorn. This may take multiple attempts, since you have to hit the keystroke between polling calls.
 
 ## Overall workflow
 

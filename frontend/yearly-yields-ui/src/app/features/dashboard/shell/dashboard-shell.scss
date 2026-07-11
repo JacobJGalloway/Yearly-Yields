@@ -1,50 +1,88 @@
+.skip-nav {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  background: var(--yy-field-green);
+  color: #FFFFFF;
+  padding: 8px 16px;
+  z-index: 9999;
+  text-decoration: none;
+
+  &:focus {
+    top: 0;
+  }
+}
+
 .shell-container {
   height: 100vh;
 }
 
+// Sidebar surface follows the same theme surface tokens as the rest of the
+// shell — field-green is reserved for border/accent lines, not fills, since
+// no brand foreground color clears WCAG AA against a full field-green fill
+// (see docs/accessibility-audit-v1.3.md and ARCHITECTURE.md §3).
 .shell-sidenav {
   width: 220px;
-  background-color: var(--yy-field-green);
-  border-right: 1px solid var(--mat-sys-outline-variant);
+  background-color: var(--mat-sys-surface-container);
+  border-right: 2px solid var(--yy-field-green);
 }
 
-:host-context(.app-theme-light) .shell-sidenav {
-  background-color: var(--mat-sys-surface-container);
+// Default theme's --mat-sys-surface-container is a heavy 75/25 parchment/green
+// mix (tuned for small containers, not a full-height fill) — too mid-tone for
+// any brand foreground color to read against. Plain parchment instead — the
+// raw brand token, not --mat-sys-surface, since Material's own mat.theme()
+// mixin also defines that variable at :root and can win the cascade tie.
+:host-context(.app-theme-default) .shell-sidenav {
+  background-color: var(--yy-parchment);
 }
 
 :host-context(.app-theme-dark) .shell-sidenav {
   background-color: var(--yy-washed-black);
 }
 
+// Fixed height matches .shell-toolbar exactly so the green border line reads
+// as one continuous accent across the top of the page, not two floating bars.
 .sidenav-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  height: 64px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid var(--yy-field-green);
   margin-bottom: 8px;
+}
+
+.theme-picker-trigger {
+  display: block;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+.sidenav-header--mobile .theme-picker-trigger {
+  width: auto;
 }
 
 .sidenav-logo {
   width: 100%;
   max-height: 48px;
   object-fit: contain;
+  display: block;
 }
 
-// Default mode: gold nav text and icons
+// Nav text/icons use the theme's own on-surface color in all three modes —
+// since the sidebar is never a field-green fill anymore, this is always AA
+// by construction (Material tunes on-surface against its own surface).
 mat-nav-list {
   a[mat-list-item]:not(.nav-item--mobile) {
     border-radius: 28px;
     margin: 2px 8px;
     width: calc(100% - 16px);
+    border-left: 4px solid transparent;
   }
 
-  .mdc-list-item__primary-text,
-  mat-icon {
-    color: var(--yy-harvest-gold);
-  }
-}
-
-// Light and dark modes: use Material system colors
-:host-context(.app-theme-light) mat-nav-list,
-:host-context(.app-theme-dark) mat-nav-list {
   .mdc-list-item__primary-text,
   mat-icon {
     color: var(--mat-sys-on-surface);
@@ -60,13 +98,12 @@ mat-nav-list {
   }
 }
 
-:host-context(.app-theme-light) .active-link {
-  background-color: var(--yy-field-green);
-  color: var(--yy-harvest-gold);
-
-  mat-icon {
-    color: var(--yy-harvest-gold);
-  }
+// Field-green as a border accent, not a fill — reads as brand "variety"
+// without ever needing a foreground color to survive against it.
+.active-link:not(.nav-item--mobile) {
+  border-left-color: var(--yy-field-green);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
 }
 
 .shell-content {
@@ -76,8 +113,10 @@ mat-nav-list {
 }
 
 .shell-toolbar {
+  height: 64px;
+  box-sizing: border-box;
   background-color: var(--mat-sys-surface);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 2px solid var(--yy-field-green);
   position: sticky;
   top: 0;
   z-index: 10;

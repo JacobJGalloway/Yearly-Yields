@@ -104,6 +104,13 @@ import { ReadingSubmitDialogComponent } from './reading-submit-dialog';
     .status-normal { color: var(--mat-sys-primary); font-weight: 500; }
     .status-anomalous { color: var(--mat-sys-error); font-weight: 500; }
     .status-error { color: var(--mat-sys-error); }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .status-normal {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class ReadingsComponent implements OnInit {

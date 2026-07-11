@@ -19,7 +19,8 @@
         [disabled]="chatLoading"
       />
     </mat-form-field>
-    <button mat-icon-button color="primary" (click)="sendMessage()" [disabled]="chatLoading || !chatInput.trim()">
+    <button mat-icon-button color="primary" (click)="sendMessage()" [disabled]="chatLoading || !chatInput.trim()"
+            aria-label="Send message">
       <mat-icon>send</mat-icon>
     </button>
   </div>
@@ -43,13 +44,13 @@
           @else if (chatResponse?.type === 'clarifying_question') { Follow-up }
           @else if (chatResponse?.type === 'link') { Reference }
         </span>
-        <button mat-icon-button (click)="closeChat()">
+        <button mat-icon-button (click)="closeChat()" aria-label="Close response panel">
           <mat-icon>close</mat-icon>
         </button>
       </div>
 
       @if (chatLoading) {
-        <div class="chat-panel-spinner"><mat-spinner diameter="36" /></div>
+        <div class="chat-panel-spinner"><mat-spinner diameter="36" aria-label="Loading chat response" /></div>
       }
 
       @if (!chatLoading && chatResponse) {
@@ -118,7 +119,7 @@
     <mat-card class="chart-card chart-card--wide">
       <mat-card-content>
         @if (sensorLoading) {
-          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+          <div class="chart-spinner"><mat-spinner diameter="40" aria-label="Loading sensor trend chart" /></div>
         } @else {
           <div class="sensor-controls">
             <mat-button-toggle-group
@@ -160,7 +161,7 @@
     <mat-card class="chart-card">
       <mat-card-content>
         @if (cycleLoading) {
-          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+          <div class="chart-spinner"><mat-spinner diameter="40" aria-label="Loading crop cycle progress chart" /></div>
         } @else {
           <div echarts [options]="cycleProgressOptions" [autoResize]="true" class="chart"></div>
         }
@@ -170,7 +171,7 @@
     <mat-card class="chart-card chart-card--weekly">
       <mat-card-content>
         @if (weeklyLoading) {
-          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+          <div class="chart-spinner"><mat-spinner diameter="40" aria-label="Loading weekly summary chart" /></div>
         } @else {
           <div class="sensor-controls">
             <mat-button-toggle-group
@@ -212,7 +213,7 @@
     <mat-card class="chart-card chart-card--wide">
       <mat-card-content>
         @if (yoyLoading) {
-          <div class="chart-spinner"><mat-spinner diameter="40" /></div>
+          <div class="chart-spinner"><mat-spinner diameter="40" aria-label="Loading year-over-year yield chart" /></div>
         } @else {
           <div echarts [options]="yoyYieldOptions" [autoResize]="true" class="chart"></div>
         }

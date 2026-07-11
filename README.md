@@ -104,15 +104,23 @@ cp backend/.env.example backend/.env
 cd backend
 docker compose up -d
 
-# 2. Apply database migrations (first time, or after pulling new migrations)
-# (still in backend/)
+# 2. Create and activate the venv (first time only), then install dependencies
+python -m venv .venv
+.venv\Scripts\activate          # Windows PowerShell — use `source .venv/bin/activate` on macOS/Linux
+pip install -e ".[dev]"
+
+# On later runs, just activate it (still in backend/):
+# .venv\Scripts\activate
+
+# 3. Apply database migrations (first time, or after pulling new migrations)
+# (still in backend/, venv active)
 python -m alembic upgrade head
 
-# 3. Start the backend (still in backend/)
+# 4. Start the backend (still in backend/, venv active)
 python -m uvicorn app.main:app --reload
 # → http://127.0.0.1:8000  |  Swagger: http://127.0.0.1:8000/docs
 
-# 4. Start the frontend (new terminal)
+# 5. Start the frontend (new terminal)
 cd frontend/yearly-yields-ui
 npm start
 # → http://localhost:4200
@@ -189,18 +197,6 @@ Sensor data is managed by two background jobs that start automatically with the 
 Weekly summaries store per-area averages for temperature, humidity, pH, wind speed, and wind direction (circular mean). All retention windows are configurable in `.env`. Year-end purge of weekly summaries is planned for v1.1.
 
 ## Future Features
-
-### v1.4
-Findings from the v1.3 accessibility audit (`docs/accessibility-audit-v1.3.md`) drive this sprint. Priority order matches the audit doc.
-
-- **Harvest gold foreground policy** — `#C9A227` fails WCAG AA as a text/icon color on every surface (1.98:1 on field green, 2.07:1 on parchment, 2.42:1 on white). It passes as a *background* with black text (8.33:1). v1.4 enforces harvest gold as background-only: nav icons and text switch to `--yy-white-board` on the field green sidebar.
-- **`aria-label` on all icon-only buttons** — all table action buttons and the toolbar logout button are missing accessible names; `matTooltip` is not a substitute for screen readers.
-- **Logo image → semantic button** — the theme-picker trigger is a clickable `<img>`, which is not keyboard-focusable. Wrap in a `<button>` with `aria-label`.
-- **Skip-navigation link** — add standard skip-nav at the top of the shell so keyboard users can bypass the sidenav on every page.
-- **Mobile nav `aria-label`** — nav items hide their text label in mobile mode without a fallback accessible name on the `<a>` element.
-- **Full browser re-audit with axe DevTools** after fixes to catch focus order, form label associations, dialog ARIA, and M3-generated tonal role contrast (not auditable from static CSS).
-
-### Possible Future Features
 - **Customer-scoped crop rates** — `CropRate` currently applies globally per crop. Needs a `customer_id` FK so pricing is per-customer per-crop (e.g. international buyers pay differently than local market customers). Required before unit price and total populate correctly on auto-generated invoices.
 - **Crop rate seeding** — No active `CropRates` exist in the DB; `generate_draft` silently bails without them. Unit price is now directly editable on draft invoices as a workaround; seed rates per crop (paired with customer once customer-scoped rates land) to automate pricing on invoice creation.
 - **Indiscriminate crop invoicing** — `log_harvest_pick` updates `last_harvest_date` only; it does not generate a draft invoice. Tomatoes (and eventually grapes) need a pick-triggered draft invoice rather than waiting for cycle close, since the vine cycle never terminates on a single harvest.
