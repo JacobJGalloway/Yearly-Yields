@@ -104,15 +104,23 @@ cp backend/.env.example backend/.env
 cd backend
 docker compose up -d
 
-# 2. Apply database migrations (first time, or after pulling new migrations)
-# (still in backend/)
+# 2. Create and activate the venv (first time only), then install dependencies
+python -m venv .venv
+.venv\Scripts\activate          # Windows PowerShell — use `source .venv/bin/activate` on macOS/Linux
+pip install -e ".[dev]"
+
+# On later runs, just activate it (still in backend/):
+# .venv\Scripts\activate
+
+# 3. Apply database migrations (first time, or after pulling new migrations)
+# (still in backend/, venv active)
 python -m alembic upgrade head
 
-# 3. Start the backend (still in backend/)
+# 4. Start the backend (still in backend/, venv active)
 python -m uvicorn app.main:app --reload
 # → http://127.0.0.1:8000  |  Swagger: http://127.0.0.1:8000/docs
 
-# 4. Start the frontend (new terminal)
+# 5. Start the frontend (new terminal)
 cd frontend/yearly-yields-ui
 npm start
 # → http://localhost:4200
