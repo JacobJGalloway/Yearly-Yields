@@ -137,6 +137,13 @@
   }
 }
 
+// Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+// see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+// already passes AA, so no swap needed there.
+:host-context(.app-theme-default) .chat-link a {
+  color: var(--yy-field-green-accessible);
+}
+
 .chat-link-icon {
   font-size: 16px;
   width: 16px;

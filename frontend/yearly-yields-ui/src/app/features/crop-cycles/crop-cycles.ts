@@ -110,6 +110,13 @@ import { CropCycleDialogComponent } from './crop-cycle-dialog';
     :host-context(.app-theme-light) .phase-harvesting {
       color: var(--yy-harvest-gold-accessible);
     }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme.
+       Light theme's field-green-on-white already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .status-active,
+    :host-context(.app-theme-default) .phase-growing {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class CropCyclesComponent implements OnInit {

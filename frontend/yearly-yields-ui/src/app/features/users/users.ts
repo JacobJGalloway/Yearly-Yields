@@ -90,6 +90,14 @@ import { UserDialogComponent } from './user-dialog';
     .role-owner { color: var(--mat-sys-primary); font-weight: 500; }
     .role-farmer { color: var(--mat-sys-on-surface); font-weight: 500; }
     .role-hired_hand { color: var(--mat-sys-on-surface-variant); }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .status-active,
+    :host-context(.app-theme-default) .role-owner {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class UsersComponent implements OnInit {

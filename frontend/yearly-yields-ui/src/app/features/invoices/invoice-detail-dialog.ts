@@ -117,6 +117,13 @@ const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
     .status-sent   { color: var(--mat-sys-tertiary, var(--yy-harvest-gold)); }
     .status-paid   { color: var(--mat-sys-primary); }
     .status-voided { color: var(--mat-sys-error); }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .status-paid {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class InvoiceDetailDialogComponent {

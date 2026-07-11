@@ -64,7 +64,7 @@ export interface YieldPlanWizardData {
           <ng-template matStepLabel>Crop Cycle</ng-template>
           <p class="step-question">Which active crop cycle?</p>
           @if (loadingCycles) {
-            <mat-spinner diameter="32" class="inline-spinner"></mat-spinner>
+            <mat-spinner diameter="32" class="inline-spinner" aria-label="Loading crop cycles"></mat-spinner>
           } @else if (cycles.length === 0) {
             <p class="empty-hint">No active cycles found in this area.</p>
           } @else {
@@ -111,7 +111,7 @@ export interface YieldPlanWizardData {
           <ng-template matStepLabel>Your Plan</ng-template>
           @if (generating) {
             <div class="generating-state">
-              <mat-spinner diameter="48"></mat-spinner>
+              <mat-spinner diameter="48" aria-label="Generating yield plan"></mat-spinner>
               <p>Analyzing your field data…</p>
             </div>
           } @else if (error) {
@@ -236,6 +236,12 @@ export interface YieldPlanWizardData {
     :host-context(.app-theme-default) .confidence-medium,
     :host-context(.app-theme-light) .confidence-medium {
       color: var(--yy-harvest-gold-accessible);
+    }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme.
+       Light theme's field-green-on-white already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .confidence-high {
+      color: var(--yy-field-green-accessible);
     }
 
     @media (max-width: 480px) {

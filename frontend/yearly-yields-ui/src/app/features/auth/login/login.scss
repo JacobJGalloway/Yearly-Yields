@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background-color: var(--yy-field-green);
+  background-color: var(--yy-parchment);
 }
 
 :host-context(.app-theme-light) .login-page {
@@ -91,4 +91,13 @@
 }
 
 .back-btn { margin-top: 8px; }
+
+// Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+// see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+// already passes AA, so no swap needed there.
+:host-context(.app-theme-default) .reset-success,
+:host-context(.app-theme-default) .reset-sent,
+:host-context(.app-theme-default) .forgot-footer a {
+  color: var(--yy-field-green-accessible);
+}
 

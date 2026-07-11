@@ -31,7 +31,7 @@
           type="submit"
           [disabled]="form.invalid || (loading$ | async)"
         >
-          <mat-spinner *ngIf="loading$ | async" diameter="20"></mat-spinner>
+          <mat-spinner *ngIf="loading$ | async" diameter="20" aria-label="Signing in"></mat-spinner>
           <span *ngIf="!(loading$ | async)">Sign In</span>
         </button>
       </form>

@@ -87,6 +87,13 @@ import { YieldPlanWizardComponent } from './yield-plan-wizard';
     .confidence-medium { color: var(--mat-sys-tertiary, var(--yy-harvest-gold)); font-weight: 500; }
     .confidence-low { color: var(--mat-sys-error); font-weight: 500; }
     .empty-state { color: var(--mat-sys-on-surface-variant); margin-top: 2em; text-align: center; }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .confidence-high {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class YieldPlansComponent implements OnInit {

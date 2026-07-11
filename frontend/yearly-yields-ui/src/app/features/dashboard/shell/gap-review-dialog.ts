@@ -26,7 +26,7 @@ import { DataGap, DataGapService } from '../../../core/services/data-gap.service
           </div>
           <button mat-stroked-button [disabled]="acknowledging().has(gap.area_id)" (click)="acknowledge(gap)">
             @if (acknowledging().has(gap.area_id)) {
-              <mat-spinner diameter="16" />
+              <mat-spinner diameter="16" aria-label="Acknowledging gap" />
             } @else {
               Acknowledge
             }
@@ -50,6 +50,13 @@ import { DataGap, DataGapService } from '../../../core/services/data-gap.service
     .gap-detail { font-size: 0.8rem; color: var(--mat-sys-on-surface-variant); }
     .all-clear { color: var(--mat-sys-primary); font-weight: 500; text-align: center; padding: 16px 0; }
     mat-dialog-content { min-width: 380px; }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .all-clear {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class GapReviewDialogComponent {

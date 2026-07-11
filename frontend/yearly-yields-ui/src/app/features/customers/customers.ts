@@ -79,6 +79,13 @@ import { CustomerDialogComponent } from './customer-dialog';
     .status-active { color: var(--mat-sys-primary); font-weight: 500; }
     .status-inactive { color: var(--mat-sys-on-surface-variant); }
     .empty-state { color: var(--mat-sys-on-surface-variant); margin-top: 2em; text-align: center; }
+
+    /* Field green fails WCAG AA (4.10:1) as text on parchment in default theme —
+       see docs/accessibility-audit-v1.3.md. Light theme's field-green-on-white
+       already passes AA, so no swap needed there. */
+    :host-context(.app-theme-default) .status-active {
+      color: var(--yy-field-green-accessible);
+    }
   `],
 })
 export class CustomersComponent implements OnInit {
