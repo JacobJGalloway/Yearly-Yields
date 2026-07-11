@@ -231,6 +231,13 @@ export interface YieldPlanWizardData {
     .confidence-medium { color: var(--yy-harvest-gold, #C9A227); font-weight: 600; }
     .confidence-low    { color: var(--mat-sys-error); font-weight: 600; }
 
+    /* Harvest gold fails WCAG AA on parchment/white surfaces — see
+       docs/accessibility-audit-v1.3.md */
+    :host-context(.app-theme-default) .confidence-medium,
+    :host-context(.app-theme-light) .confidence-medium {
+      color: var(--yy-harvest-gold-accessible);
+    }
+
     @media (max-width: 480px) {
       .step-actions { flex-direction: column-reverse; }
       .step-actions button { width: 100%; }

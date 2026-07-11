@@ -59,7 +59,7 @@ import { FieldDialogComponent } from './field-dialog';
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let f">
-          <button mat-icon-button matTooltip="Edit" (click)="openEdit(f)">
+          <button mat-icon-button matTooltip="Edit" aria-label="Edit field" (click)="openEdit(f)">
             <mat-icon>edit</mat-icon>
           </button>
         </td>

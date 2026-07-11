@@ -47,11 +47,19 @@ body {
   color: var(--yy-text-black) !important;
 }
 
-// Table action icons: harvest gold icon, transparent ripple background
+// Table action icons: harvest gold icon, transparent ripple background.
+// Dark theme's table surface already passes AA with the vibrant gold (4.68:1);
+// default (parchment) and light (white) surfaces need the darkened accessible
+// variant — see docs/accessibility-audit-v1.3.md and ARCHITECTURE.md §3.
 .mat-mdc-table td .mat-mdc-icon-button {
   color: var(--yy-harvest-gold);
   --mdc-icon-button-state-layer-color: transparent;
   background-color: transparent;
+}
+
+.app-theme-default .mat-mdc-table td .mat-mdc-icon-button,
+.app-theme-light .mat-mdc-table td .mat-mdc-icon-button {
+  color: var(--yy-harvest-gold-accessible);
 }
 
 // Chips: harvest gold container, dark text label

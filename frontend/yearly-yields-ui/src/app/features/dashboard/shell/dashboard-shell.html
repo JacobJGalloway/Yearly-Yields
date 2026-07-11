@@ -1,22 +1,25 @@
+<a href="#main-content" class="skip-nav">Skip to main content</a>
+
 <mat-sidenav-container class="shell-container">
 
   <mat-sidenav mode="side" opened [class.shell-sidenav--mobile]="isMobile()" class="shell-sidenav">
     <div class="sidenav-header" [class.sidenav-header--mobile]="isMobile()">
-      <img [src]="logoSrc" alt="Yearly Yields" class="sidenav-logo"
-           [class.sidenav-logo--icon]="isMobile()"
-           (click)="openThemePicker()"
-           matTooltip="Change display mode"
-           style="cursor: pointer;" />
+      <button class="theme-picker-trigger" (click)="openThemePicker()" matTooltip="Change display mode"
+              aria-label="Change theme">
+        <img [src]="logoSrc" alt="" aria-hidden="true" class="sidenav-logo"
+             [class.sidenav-logo--icon]="isMobile()" />
+      </button>
     </div>
 
-    <mat-nav-list>
+    <mat-nav-list aria-label="Main navigation">
       @for (item of navItems; track item.route) {
         <a mat-list-item
            [routerLink]="item.route"
            routerLinkActive="active-link"
            [class.nav-item--mobile]="isMobile()"
            [matTooltip]="isMobile() ? item.label : ''"
-           matTooltipPosition="right">
+           matTooltipPosition="right"
+           [attr.aria-label]="item.label">
           <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
           @if (!isMobile()) {
             <span matListItemTitle>{{ item.label }}</span>
@@ -29,12 +32,12 @@
   <mat-sidenav-content class="shell-content">
     <mat-toolbar class="shell-toolbar">
       <span class="toolbar-spacer"></span>
-      <button mat-icon-button (click)="logout()" matTooltip="Sign out">
+      <button mat-icon-button (click)="logout()" matTooltip="Sign out" aria-label="Log out">
         <mat-icon>logout</mat-icon>
       </button>
     </mat-toolbar>
 
-    <main class="shell-main">
+    <main id="main-content" class="shell-main" tabindex="-1">
       <router-outlet />
     </main>
   </mat-sidenav-content>

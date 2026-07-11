@@ -76,7 +76,7 @@ import { CropCycleDialogComponent } from './crop-cycle-dialog';
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let c">
           @if (c.status === 'active' || c.status === 'fallow') {
-            <button mat-icon-button matTooltip="Update" (click)="openEdit(c)">
+            <button mat-icon-button matTooltip="Update" aria-label="Update crop cycle" (click)="openEdit(c)">
               <mat-icon>edit</mat-icon>
             </button>
           }
@@ -100,6 +100,16 @@ import { CropCycleDialogComponent } from './crop-cycle-dialog';
     .phase-harvesting { color: var(--yy-harvest-gold); font-weight: 500; }
     .phase-complete { color: var(--mat-sys-on-surface-variant); }
     .sub-phase-label { color: var(--mat-sys-on-surface-variant); font-size: 0.75em; font-weight: 400; }
+
+    /* Harvest gold fails WCAG AA on parchment/white table surfaces (see
+       docs/accessibility-audit-v1.3.md) — swap to the accessible variant
+       in default/light themes. Dark theme's surface already passes AA. */
+    :host-context(.app-theme-default) .status-harvested,
+    :host-context(.app-theme-light) .status-harvested,
+    :host-context(.app-theme-default) .phase-harvesting,
+    :host-context(.app-theme-light) .phase-harvesting {
+      color: var(--yy-harvest-gold-accessible);
+    }
   `],
 })
 export class CropCyclesComponent implements OnInit {

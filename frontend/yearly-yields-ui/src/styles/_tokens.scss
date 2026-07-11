@@ -3,18 +3,23 @@
 // SCSS vars ($yy-*) for use inside Sass context (mat.theme, color math).
 // CSS custom properties (--yy-*) for use in component SCSS and templates.
 
-$yy-field-green:  #507B6A;
-$yy-harvest-gold: #C9A227;
-$yy-washed-black: #3B3A3C;
-$yy-text-black:   #08060D;
-$yy-white-board:  #EEEEEE;
-$yy-parchment:    #F4EDD9;
+$yy-field-green:             #507B6A;
+$yy-harvest-gold:            #C9A227;
+$yy-harvest-gold-accessible: #7D6418;
+$yy-washed-black:            #3B3A3C;
+$yy-text-black:              #08060D;
+$yy-white-board:             #EEEEEE;
+$yy-parchment:                #F4EDD9;
 
 :root {
-  --yy-field-green:  #{$yy-field-green};
-  --yy-harvest-gold: #{$yy-harvest-gold};
-  --yy-washed-black: #{$yy-washed-black};
-  --yy-text-black:   #{$yy-text-black};
-  --yy-white-board:  #{$yy-white-board};
-  --yy-parchment:    #{$yy-parchment};
+  --yy-field-green:             #{$yy-field-green};
+  --yy-harvest-gold:            #{$yy-harvest-gold};
+  // Foreground-only variant of harvest gold — WCAG AA (4.5:1+) on parchment and
+  // white surfaces. Gold itself stays background-only; use this for text/icon
+  // colors in default and light themes. See docs/accessibility-audit-v1.3.md.
+  --yy-harvest-gold-accessible: #{$yy-harvest-gold-accessible};
+  --yy-washed-black:            #{$yy-washed-black};
+  --yy-text-black:              #{$yy-text-black};
+  --yy-white-board:             #{$yy-white-board};
+  --yy-parchment:                #{$yy-parchment};
 }

@@ -27,6 +27,12 @@
   span { flex: 1; }
 }
 
+// Icon foreground fails AA on parchment/white surfaces — see docs/accessibility-audit-v1.3.md
+:host-context(.app-theme-default) .gap-banner .gap-icon,
+:host-context(.app-theme-light) .gap-banner .gap-icon {
+  color: var(--yy-harvest-gold-accessible);
+}
+
 .chat-input-row {
   display: flex;
   align-items: center;
@@ -188,6 +194,11 @@
   ::ng-deep .mat-mdc-progress-spinner circle {
     stroke: var(--yy-harvest-gold);
   }
+}
+
+:host-context(.app-theme-default) .chart-spinner ::ng-deep .mat-mdc-progress-spinner circle,
+:host-context(.app-theme-light) .chart-spinner ::ng-deep .mat-mdc-progress-spinner circle {
+  stroke: var(--yy-harvest-gold-accessible);
 }
 
 .sensor-controls {

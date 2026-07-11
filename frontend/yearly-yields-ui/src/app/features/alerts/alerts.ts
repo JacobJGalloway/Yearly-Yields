@@ -74,7 +74,7 @@ import { FieldService, GrowingArea } from '../../core/services/field.service';
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let a">
           @if (a.status === 'active') {
-            <button mat-icon-button matTooltip="Resolve manually" (click)="resolve(a)">
+            <button mat-icon-button matTooltip="Resolve manually" aria-label="Resolve alert manually" (click)="resolve(a)">
               <mat-icon>check_circle</mat-icon>
             </button>
           }

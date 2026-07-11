@@ -62,12 +62,13 @@ import { UserDialogComponent } from './user-dialog';
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let u">
           @if (canEdit(u)) {
-            <button mat-icon-button matTooltip="Edit" (click)="openEdit(u)">
+            <button mat-icon-button matTooltip="Edit" aria-label="Edit user" (click)="openEdit(u)">
               <mat-icon>edit</mat-icon>
             </button>
             @if (u.id !== currentUser()?.id) {
               <button mat-icon-button
                 [matTooltip]="u.is_active ? 'Deactivate' : 'Reactivate'"
+                [attr.aria-label]="u.is_active ? 'Deactivate user' : 'Reactivate user'"
                 (click)="toggleActive(u)">
                 <mat-icon>{{ u.is_active ? 'person_off' : 'person' }}</mat-icon>
               </button>

@@ -52,11 +52,12 @@ import { CustomerDialogComponent } from './customer-dialog';
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let c">
-          <button mat-icon-button matTooltip="Edit" (click)="openDialog(c)">
+          <button mat-icon-button matTooltip="Edit" aria-label="Edit customer" (click)="openDialog(c)">
             <mat-icon>edit</mat-icon>
           </button>
           <button mat-icon-button
             [matTooltip]="c.is_active ? 'Deactivate' : 'Reactivate'"
+            [attr.aria-label]="c.is_active ? 'Deactivate customer' : 'Reactivate customer'"
             (click)="toggleActive(c)">
             <mat-icon>{{ c.is_active ? 'person_off' : 'person' }}</mat-icon>
           </button>

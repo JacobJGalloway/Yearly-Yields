@@ -19,7 +19,8 @@
         [disabled]="chatLoading"
       />
     </mat-form-field>
-    <button mat-icon-button color="primary" (click)="sendMessage()" [disabled]="chatLoading || !chatInput.trim()">
+    <button mat-icon-button color="primary" (click)="sendMessage()" [disabled]="chatLoading || !chatInput.trim()"
+            aria-label="Send message">
       <mat-icon>send</mat-icon>
     </button>
   </div>
@@ -43,7 +44,7 @@
           @else if (chatResponse?.type === 'clarifying_question') { Follow-up }
           @else if (chatResponse?.type === 'link') { Reference }
         </span>
-        <button mat-icon-button (click)="closeChat()">
+        <button mat-icon-button (click)="closeChat()" aria-label="Close response panel">
           <mat-icon>close</mat-icon>
         </button>
       </div>

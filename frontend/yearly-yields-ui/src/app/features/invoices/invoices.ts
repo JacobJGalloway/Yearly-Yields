@@ -69,11 +69,12 @@ import { InvoiceDetailDialogComponent } from './invoice-detail-dialog';
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let i">
           @if (i.status !== 'paid' && i.status !== 'voided') {
-            <button mat-icon-button matTooltip="Review / Advance" (click)="openDetail(i)">
+            <button mat-icon-button matTooltip="Review / Advance" aria-label="Review or advance invoice" (click)="openDetail(i)">
               <mat-icon>receipt_long</mat-icon>
             </button>
           }
           <button mat-icon-button matTooltip="Download PDF"
+                  aria-label="Download invoice PDF"
                   [disabled]="downloading() === i.id"
                   (click)="downloadPdf(i)">
             <mat-icon>picture_as_pdf</mat-icon>
