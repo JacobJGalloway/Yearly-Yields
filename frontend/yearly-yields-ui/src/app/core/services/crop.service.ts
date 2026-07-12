@@ -26,6 +26,7 @@ export interface Crop {
 export interface CropCycle {
   id: string;
   growing_area_id: string;
+  growing_area_plot_id: string;
   crop_id: string | null;
   planned_crop_id: string | null;
   season_year: number;
@@ -85,5 +86,11 @@ export class CropService {
 
   updateCycle(id: string, payload: CropCycleUpdate): Observable<CropCycle> {
     return this.http.patch<CropCycle>(`${this.base}/cycles/${id}`, payload);
+  }
+
+  logPick(areaId: string, plotId: string, pickDate?: string): Observable<unknown> {
+    return this.http.post(`/api/v1/fields/${areaId}/plots/${plotId}/log-pick`, {
+      pick_date: pickDate ?? null,
+    });
   }
 }

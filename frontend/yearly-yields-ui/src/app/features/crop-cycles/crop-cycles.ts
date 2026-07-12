@@ -75,6 +75,11 @@ import { CropCycleDialogComponent } from './crop-cycle-dialog';
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let c">
+          @if (c.status === 'active' && isContinuousPick(c)) {
+            <button mat-icon-button matTooltip="Log Pick" aria-label="Log harvest pick" (click)="logPick(c)" [disabled]="logging().has(c.id)">
+              <mat-icon>agriculture</mat-icon>
+            </button>
+          }
           @if (c.status === 'active' || c.status === 'fallow') {
             <button mat-icon-button matTooltip="Update" aria-label="Update crop cycle" (click)="openEdit(c)">
               <mat-icon>edit</mat-icon>
@@ -127,6 +132,7 @@ export class CropCyclesComponent implements OnInit {
   cycles = signal<CropCycle[]>([]);
   fields = signal<GrowingArea[]>([]);
   crops = signal<Crop[]>([]);
+  logging = signal<Set<string>>(new Set());
   columns = ['field', 'crop', 'phase', 'planted_at', 'season', 'status', 'yield', 'actions'];
 
   ngOnInit(): void {
@@ -217,6 +223,19 @@ export class CropCyclesComponent implements OnInit {
         return sp?.label ?? '';
       }
     }
+  }
+
+  isContinuousPick(cycle: CropCycle): boolean {
+    // Only tomatoes use continuous-pick harvesting today (see PhaseDays.min_pick_interval_days).
+    return this.crops().find(c => c.id === cycle.crop_id)?.name === 'tomatoes';
+  }
+
+  logPick(cycle: CropCycle): void {
+    this.logging.update(s => new Set(s).add(cycle.id));
+    this.cropService.logPick(cycle.growing_area_id, cycle.growing_area_plot_id).subscribe({
+      next: () => this.logging.update(s => { const next = new Set(s); next.delete(cycle.id); return next; }),
+      error: () => this.logging.update(s => { const next = new Set(s); next.delete(cycle.id); return next; }),
+    });
   }
 
   statusLabel(s: string): string {

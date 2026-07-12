@@ -26,6 +26,7 @@ def _cycle_to_dict(
     return {
         "id": cycle.id,
         "growing_area_id": cycle.growing_area_id,
+        "growing_area_plot_id": cycle.growing_area_plot_id,
         "crop_id": cycle.crop_id,
         "planned_crop_id": cycle.planned_crop_id,
         "season_year": cycle.season_year,
