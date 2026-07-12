@@ -142,6 +142,63 @@ Authorization: Bearer <owner_token>
 
 This is idempotent — safe to call multiple times. Crops and customers must be seeded before crop cycles or invoices can be created.
 
+## Wiping and reseeding the database
+
+Use this when demo data has drifted or accumulated test artifacts (e.g. a crop cycle marked `harvested` prematurely during testing) and you want a clean, known-good baseline instead of patching individual records.
+
+### 1. Drop and recreate the database
+
+With the dev server stopped and Docker running, from `backend/`:
+
+```powershell
+docker exec -it yearly_yields_db psql -U user -c "DROP DATABASE yearly_yields;"
+docker exec -it yearly_yields_db psql -U user -c "CREATE DATABASE yearly_yields;"
+```
+
+### 2. Re-run migrations
+
+```powershell
+python -m alembic upgrade head
+```
+
+### 3. Start the dev server
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
+
+### 4. Register an owner account
+
+The seed scripts authenticate as an existing user — the database has none after a wipe. Register one via the frontend signup flow, or `POST /api/v1/auth/register` directly, before continuing.
+
+### 5. Seed reference data
+
+```
+POST /api/v1/admin/seed
+Authorization: Bearer <owner_token>
+```
+
+Seeds crops, customers, permissions, and role permissions. Idempotent.
+
+### 6. Run the seed scripts, in order
+
+Each of these authenticates against the running dev server — set `OWNER_EMAIL` / `OWNER_PASSWORD` in the environment first, or the script will prompt for them:
+
+```powershell
+python seed_demo_farms.py
+python seed_historical_harvests.py
+python seed_morristown_harvests.py
+python seed_sensor_backfill.py
+```
+
+- `seed_demo_farms.py` creates the Jacksonville, IL open fields and Morristown, TN greenhouses — must run first, everything else depends on these areas existing.
+- `seed_historical_harvests.py` and `seed_morristown_harvests.py` backfill hardcoded historical harvest years (2022–2024 for open fields, 2023–2024 for greenhouses) — order between these two doesn't matter.
+- `seed_sensor_backfill.py` generates synthetic Q2 2026-onward sensor readings for all active growing areas; safe to re-run.
+
+All four scripts are safe to re-run — they skip records that already exist rather than duplicating them.
+
+**Note:** if a machine has real, non-seeded operational data (harvests logged through actual day-to-day use rather than seed scripts), wiping that machine's database will lose it. Only do this on a machine where the current data is disposable test/demo state.
+
 ## Yield planning
 
 Yield plans are generated on demand by a Claude-powered ReAct agent. To request one:
