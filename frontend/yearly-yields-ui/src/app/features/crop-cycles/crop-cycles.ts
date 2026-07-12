@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { TitleCasePipe } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -128,6 +129,7 @@ export class CropCyclesComponent implements OnInit {
   private cropService = inject(CropService);
   private fieldService = inject(FieldService);
   private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
 
   cycles = signal<CropCycle[]>([]);
   fields = signal<GrowingArea[]>([]);
@@ -233,7 +235,10 @@ export class CropCyclesComponent implements OnInit {
   logPick(cycle: CropCycle): void {
     this.logging.update(s => new Set(s).add(cycle.id));
     this.cropService.logPick(cycle.growing_area_id, cycle.growing_area_plot_id).subscribe({
-      next: () => this.logging.update(s => { const next = new Set(s); next.delete(cycle.id); return next; }),
+      next: () => {
+        this.logging.update(s => { const next = new Set(s); next.delete(cycle.id); return next; });
+        this.snackBar.open('Pick logged', 'Dismiss', { duration: 3000 });
+      },
       error: () => this.logging.update(s => { const next = new Set(s); next.delete(cycle.id); return next; }),
     });
   }
