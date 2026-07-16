@@ -2,7 +2,7 @@
   <img src="frontend/src/assets/brand/Logo Work Default Mode.png" alt="Yearly Yields" width="480"/>
 </p>
 
-<p align="center"><strong>v1.2</strong></p>
+<p align="center"><strong>v1.4</strong></p>
 
 An agricultural monitoring and yield prediction system built for Mid-West farmers. Ingests IoT sensor readings from open fields and greenhouses, detects anomalies against rolling historical data using a ReAct agentic loop powered by Claude, fires email alerts, and supports yield planning and invoice tracking across crop cycles.
 
